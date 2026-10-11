@@ -1,0 +1,3 @@
+ESTA É A PASTA QUE DEVE SER ENVIADA INTEIRA AO CLOUDFLARE.
+
+Selecione a pasta "publicar" no upload. Não envie somente index.html, pois a interface também usa ux-v2.css, vendor e brand/fonts.

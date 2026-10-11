@@ -1,0 +1,14 @@
+# Backups e material de handoff (não vão pro deploy)
+_backup-antes-v6*/
+index.babel-backup.html
+previews/
+handoff-codex/
+.claude/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
