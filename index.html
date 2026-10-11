@@ -93,7 +93,7 @@
   .board::-webkit-scrollbar{height:14px}
   .board::-webkit-scrollbar-track{background:rgba(0,0,0,.06);border-radius:8px}
   .board::-webkit-scrollbar-thumb{background:var(--gold);border-radius:8px;border:3px solid var(--bg)}
-  .board::-webkit-scrollbar-thumb:hover{background:#b8932f}
+  .board::-webkit-scrollbar-thumb:hover{background:#3B101D}
   .col{background:rgba(0,0,0,.025);border-radius:14px;width:286px;min-width:286px;display:flex;flex-direction:column;max-height:100%}
   .col.drop{outline:2px dashed var(--gold);outline-offset:-2px}
   .col-head{display:flex;align-items:center;gap:8px;padding:12px 14px 8px}
@@ -215,30 +215,30 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const S = (id,label,color)=>({id,label,color});
 const LEAD_PIPELINES = {
   evento_presencial: { label:"Vendas / Evento", icon:"🎟️", stages:[
-    S("NOVO","Novo lead","#3B82F6"), S("FORA","Fora","#14B8A6"),
+    S("NOVO","Novo lead","#3B101D"), S("FORA","Fora","#3B101D"),
     S("PIX_PENDENTE","Pix pendente","#EAB308"), S("COMPROU","Comprou ingresso","#22C55E"),
     S("AGENDOU_CALL","Agendou call","#16A34A"), S("COMPROU_MENTORIA","Comprou mentoria","#059669"),
     S("FORA_POS","Fora pós","#9CA3AF") ]},
   whatsapp_cris: { label:"WhatsApp (Cris)", icon:"💬", wa:true, stages:[
-    S("WC_NOVO","Novo contato","#3B82F6"), S("WC_CONVERSA","Em atendimento","#6366F1"),
-    S("WC_AGENDADO","Agendado","#A855F7"), S("WC_PROPOSTA","Proposta enviada","#EAB308"),
+    S("WC_NOVO","Novo contato","#3B101D"), S("WC_CONVERSA","Em atendimento","#3B101D"),
+    S("WC_AGENDADO","Agendado","#3B101D"), S("WC_PROPOSTA","Proposta enviada","#EAB308"),
     S("WC_FECHOU","Fechou ✅","#22C55E"), S("WC_SEM_RESPOSTA","Sem resposta","#D1D5DB"),
     S("WC_PERDIDO","Perdido","#9CA3AF") ]},
 };
 const CS_STAGES = [
-  S("PAGAMENTO_TOTAL","Pagamento Total Feito","#3B82F6"), S("FORM_ENVIADO","Form de preenchimento enviado","#6366F1"),
-  S("CONTRATO_ENVIADO","Contrato enviado","#818CF8"), S("CONTRATO_ASSINADO","Assinado","#8B5CF6"),
-  S("BRIEFING_FEITO","Briefing feito","#A855F7"), S("CALL_MARCADA","Call de Mentoria Agendada","#F59E0B"),
-  S("CALL1_FEITA","1ª Call feita","#F97316"), S("CALL2_FEITA","2ª Call feita","#FB923C"),
-  S("PRIMEIRA_VITORIA","1ª Vitória","#22C55E"), S("DEPOIMENTO","Entrevista de depoimento","#C9A84C") ];
+  S("PAGAMENTO_TOTAL","Pagamento Total Feito","#3B101D"), S("FORM_ENVIADO","Form de preenchimento enviado","#3B101D"),
+  S("CONTRATO_ENVIADO","Contrato enviado","#3B101D"), S("CONTRATO_ASSINADO","Assinado","#3B101D"),
+  S("BRIEFING_FEITO","Briefing feito","#3B101D"), S("CALL_MARCADA","Call de Mentoria Agendada","#F59E0B"),
+  S("CALL1_FEITA","1ª Call feita","#FF4D00"), S("CALL2_FEITA","2ª Call feita","#FF4D00"),
+  S("PRIMEIRA_VITORIA","1ª Vitória","#22C55E"), S("DEPOIMENTO","Entrevista de depoimento","#3B101D") ];
 const LOWTICKET_STAGES = [
   S("Comprou Low Ticket","Comprou Low Ticket","#22C55E"),
-  S("1ª Mensagem Enviada","1ª Mensagem Enviada","#3B82F6"),
-  S("Respondeu","Respondeu","#6366F1"),
-  S("Diagnóstico Feito","Diagnóstico Feito","#8B5CF6"),
-  S("Pitch Apresentado","Pitch Apresentado","#A855F7"),
+  S("1ª Mensagem Enviada","1ª Mensagem Enviada","#3B101D"),
+  S("Respondeu","Respondeu","#3B101D"),
+  S("Diagnóstico Feito","Diagnóstico Feito","#3B101D"),
+  S("Pitch Apresentado","Pitch Apresentado","#3B101D"),
   S("Qualificado (topa investir R$1k em tráfego)","Qualificado (R$1k tráfego)","#F59E0B"),
-  S("Proposta Enviada (R$697)","Proposta Enviada (R$697)","#F97316"),
+  S("Proposta Enviada (R$697)","Proposta Enviada (R$697)","#FF4D00"),
   S("Fechado","Fechado","#059669"),
   S("Perdido / Follow-up","Perdido / Follow-up","#9CA3AF")
 ];
@@ -519,9 +519,9 @@ function LowTicketBoard({search,onToast,userId}){
   const byS=n=>rows.filter(c=>stageOf(c)===n).length;
   const sumItems=[
     {label:"Total",value:rows.length},
-    {label:"Responderam",value:byS("Respondeu"),color:"#6366F1"},
+    {label:"Responderam",value:byS("Respondeu"),color:"#3B101D"},
     {label:"Qualificados",value:byS("Qualificado (topa investir R$1k em tráfego)"),color:"#F59E0B"},
-    {label:"Proposta",value:byS("Proposta Enviada (R$697)"),color:"#F97316"},
+    {label:"Proposta",value:byS("Proposta Enviada (R$697)"),color:"#FF4D00"},
     {label:"Fechado",value:byS("Fechado"),color:"#059669"}
   ];
   const chatModal = sel && h("div",{className:"overlay",onClick:()=>setSel(null)},
@@ -591,7 +591,7 @@ function MentoradoEsteira({mentoradoId,onToast}){
           t.dono&&h("span",{style:{marginLeft:6,fontSize:10.5,fontWeight:700,color:"var(--gold)",background:"var(--gold-soft)",padding:"1px 6px",borderRadius:5}},t.dono),
           t.avanca_para&&h("span",{style:{marginLeft:6,fontSize:10.5,color:"var(--muted)"}},"↗ move etapa"),
           (!t.done&&t.vence&&t.vence<hojeStr())&&h("span",{style:{marginLeft:6,fontSize:10.5,fontWeight:700,color:"#DC2626"}},"⚠ atrasado"),
-          t.tipo==="recorrente"&&h("span",{style:{marginLeft:6,fontSize:10.5,fontWeight:700,color:"#6366F1"}},"🔁")),
+          t.tipo==="recorrente"&&h("span",{style:{marginLeft:6,fontSize:10.5,fontWeight:700,color:"#3B101D"}},"🔁")),
         h("div",{style:{display:"flex",gap:8,marginTop:5,alignItems:"center"}},
           t.link_modelo&&h("a",{href:t.link_modelo,target:"_blank",onClick:function(e){e.stopPropagation();},style:{fontSize:12,color:"var(--gold)",whiteSpace:"nowrap",fontWeight:600}},"📄 modelo"),
           h("input",{value:t.link_aluno||"",placeholder:"colar link do aluno...",onChange:function(e){setLink(t,e.target.value);},onBlur:function(){saveLink(t);},style:{flex:1,minWidth:0,fontSize:12,padding:"5px 8px",border:"1px solid var(--line)",borderRadius:7}})
@@ -748,7 +748,7 @@ function ConversationPane({conv,channel,account,userId,stages,onStageChange,onTo
       (channel==="instagram"&&ct.username&&!isNumId(ct.username))&&h("a",{className:"btn ghost sm",style:{marginLeft:8},target:"_blank",href:"https://ig.me/m/"+ct.username,title:"Abrir o direct nessa pessoa"},"💬 Abrir DM"),
       onOpenFicha&&h("button",{className:"btn ghost sm",style:{marginLeft:8},onClick:onOpenFicha},"📋 Ficha")
     ),
-    conv.agenda_link&&h("div",{style:{padding:"8px 12px",background:"var(--gold-soft)",fontSize:12.5,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},"📅 "+fmtDateBR(conv.agenda_inicio),h("a",{href:conv.agenda_link,target:"_blank",style:{color:"#2563EB",fontWeight:700}},"Entrar no Meet")),
+    conv.agenda_link&&h("div",{style:{padding:"8px 12px",background:"var(--gold-soft)",fontSize:12.5,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},"📅 "+fmtDateBR(conv.agenda_inicio),h("a",{href:conv.agenda_link,target:"_blank",style:{color:"#3B101D",fontWeight:700}},"Entrar no Meet")),
     (!dfHidden && conv.agenda_inicio && new Date(conv.agenda_inicio)<new Date() && !conv.call_status && !conv.call_em && conv.kanban_stages && (conv.kanban_stages.name==="Agendado"||conv.kanban_stages.name==="2ª reunião")) && h("div",{style:{margin:"10px 12px 0",background:"var(--gold-soft)",border:"1px solid var(--gold)",borderRadius:12,padding:"12px 14px"}},
       h("div",{style:{fontSize:12.5,fontWeight:800,color:"var(--gold)",marginBottom:8}},"📞 Como foi a call? ("+fmtDateBR(conv.agenda_inicio)+")"),
       h("textarea",{value:dfFb,onChange:e=>setDfFb(e.target.value),rows:"2",placeholder:"Feedback da call (o que rolou, objeções, próximo passo)...",style:{width:"100%",padding:"9px 11px",border:"1px solid var(--line)",borderRadius:9,fontSize:13.5,background:"var(--card)",color:"var(--ink)",resize:"vertical",marginBottom:8}}),
@@ -1207,9 +1207,9 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
                     )
                   ),
                   c.next_action&&h("div",{style:{fontSize:12.5,marginTop:7,color:"var(--gold)"}},"⏭ ",c.next_action,c.next_action_at?(" · "+fmtDateBR(c.next_action_at)):""),
-                  c.agenda_inicio&&h("div",{style:{fontSize:12,marginTop:7,color:"#7C3AED",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},"📅 "+fmtDateBR(c.agenda_inicio), c.agenda_link&&h("a",{href:c.agenda_link,target:"_blank",onClick:e=>e.stopPropagation(),style:{color:"#2563EB",fontWeight:600}},"Meet")),
+                  c.agenda_inicio&&h("div",{style:{fontSize:12,marginTop:7,color:"#3B101D",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},"📅 "+fmtDateBR(c.agenda_inicio), c.agenda_link&&h("a",{href:c.agenda_link,target:"_blank",onClick:e=>e.stopPropagation(),style:{color:"#3B101D",fontWeight:600}},"Meet")),
                   (hasVal||stale||tags.length>0||c.garantia===true||c.garantia===false)&&h("div",{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:7}},
-                    c.produto&&h("span",{className:"tag",style:{background:"#F3E8FF",color:"#7C3AED"}},c.produto),
+                    c.produto&&h("span",{className:"tag",style:{background:"#EFEAE3",color:"#3B101D"}},c.produto),
                     (c.garantia===true||c.garantia===false)&&h("span",{className:"tag",style:{background:c.garantia?"#ECFDF5":"#FEF2F2",color:c.garantia?"#059669":"#DC2626"}},c.garantia?"C/ garantia":"S/ garantia"),
                     hasVal&&h("span",{className:"tag",style:{background:"#ECFDF5",color:"#059669"}},brl(c.deal_value)),
                     stale&&h("span",{className:"tag",style:{background:"#FEF2F2",color:"#DC2626"}},"parado "+dd+"d"),
@@ -1249,8 +1249,8 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
           var pend=(convs||[]).filter(function(c){return c.agenda_inicio&&new Date(c.agenda_inicio)<new Date()&&!c.call_status&&!c.call_em&&c.kanban_stages&&(c.kanban_stages.name==="Agendado"||c.kanban_stages.name==="2ª reunião");});
           var dfBtn=function(c,tipo,label,bg){ return h("button",{className:"btn ghost sm",style:{padding:"5px 8px",fontSize:11.5,fontWeight:700,background:bg||"var(--card)",color:bg?"#fff":"var(--ink)",border:bg?"none":"1px solid var(--line)"},onClick:function(e){e.stopPropagation();marcarDesfecho(c,tipo);}},label); };
           return [
-            pend.length>0&&h("div",{key:"desfbox",style:{margin:"0 0 10px",padding:"10px 11px",background:"rgba(2,132,199,.10)",border:"1px solid #0284C7",borderRadius:10}},
-              h("div",{style:{fontSize:12,fontWeight:800,color:"#0284C7",marginBottom:8}},"📞 "+pend.length+" call(s) pra dar desfecho — marque cada uma:"),
+            pend.length>0&&h("div",{key:"desfbox",style:{margin:"0 0 10px",padding:"10px 11px",background:"rgba(59,16,29,.08)",border:"1px solid #3B101D",borderRadius:10}},
+              h("div",{style:{fontSize:12,fontWeight:800,color:"#3B101D",marginBottom:8}},"📞 "+pend.length+" call(s) pra dar desfecho — marque cada uma:"),
               pend.map(function(c){ return h("div",{key:c.id,style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",padding:"7px 0",borderTop:"1px solid var(--line)"}},
                 h("div",{style:{flex:"1 1 130px",fontSize:12.5,fontWeight:600,minWidth:0}}, nameOf(c), h("span",{style:{color:"var(--muted)",fontWeight:400}}," · "+fmtDateBR(c.agenda_inicio))),
                 dfBtn(c,"aconteceu","✅ Feita","#059669"),
@@ -1607,7 +1607,7 @@ function RotinaView({session,onToast,isAdmin}){
         h("span",{title:c.kind==="f"?"fixa (todo dia)":"fica até concluir",style:{marginLeft:7,fontSize:12}}, c.tag),
         c.obj.instrucoes&&h("span",{title:"tem passo a passo",style:{marginLeft:5,fontSize:11.5,opacity:.65}},"📋")
       ),
-      c.obj.de_nome&&h("div",{style:{fontSize:11.5,fontWeight:700,color:"#7C3AED",marginTop:5}},"👤 de "+c.obj.de_nome),
+      c.obj.de_nome&&h("div",{style:{fontSize:11.5,fontWeight:700,color:"#3B101D",marginTop:5}},"👤 de "+c.obj.de_nome),
       h("div",{style:{display:"flex",gap:6,marginTop:9,justifyContent:"flex-end"}}, act)
     ); };
   return h("div",{style:{maxWidth:1080,margin:"0 auto",padding:"18px 16px",width:"100%",overflowY:"auto"}},
@@ -2149,7 +2149,7 @@ function Dashboard({onToast,email}){
         card("Na fila (Novo Lead)",privNums.fila,"#DC2626")
       ),
       h("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginTop:10}},
-        card("📸 IG conversas iniciadas",privNums.igIniciadas,"#8B5CF6"),
+        card("📸 IG conversas iniciadas",privNums.igIniciadas,"#3B101D"),
         card("📸 IG agendados",privNums.igAgendados,"var(--gold)")
       ),
       h("div",{style:{fontSize:11,color:"var(--muted)",marginTop:8}},"Abordados = sairam de \"Novo Lead\" hoje. Agendados = entraram em \"Agendado\". Contagem comeca a partir de hoje.")
@@ -2242,7 +2242,7 @@ function RotinaCrisView({onToast}){
       h("button",{className:"btn ghost sm",style:{marginLeft:"auto"},onClick:function(){setD(null);load();}},"Atualizar")),
     sec("📞","Calls pra dar desfecho",d.desf.length, d.desf.map(function(c){return row(h(Fr,null,h("b",null,nome(c)),h("span",{style:{color:"var(--muted)"}}," · call "+dias(c.agenda_inicio)+" atrás")));})),
     sec("✍️","Contratos pra cobrar",d.con.length, h(Fr,null, h("div",{style:{fontSize:12,color:"var(--muted)",marginBottom:4}},"Em aberto: "+brl2(totCon)), d.con.map(function(c){return row(h(Fr,null,h("b",null,nome(c)),h("span",{style:{color:"var(--muted)"}}," · "+(c.deal_value?brl2(c.deal_value):"—")+" · enviado "+dias(c.contrato_enviado_em)+" atrás")));}))),
-    sec("📅","Agenda de hoje",d.agenda.length, d.agenda.map(function(e){var col=e.closer==="Mateus"?"#2563EB":"#0E9F6E";return row(h(Fr,null,h("b",null,hora(e.inicio))," "+(e.titulo||"")+" ",h("span",{style:{color:col,fontWeight:700}},"· "+(e.closer||"")),e.meet_link?h(Fr,null," · ",h("a",{href:e.meet_link,target:"_blank"},"Meet")):null),col);})),
+    sec("📅","Agenda de hoje",d.agenda.length, d.agenda.map(function(e){var col=e.closer==="Mateus"?"#3B101D":"#6B7280";return row(h(Fr,null,h("b",null,hora(e.inicio))," "+(e.titulo||"")+" ",h("span",{style:{color:col,fontWeight:700}},"· "+(e.closer||"")),e.meet_link?h(Fr,null," · ",h("a",{href:e.meet_link,target:"_blank"},"Meet")):null),col);})),
     sec("🥶","Leads parados +3 dias",d.parados.length, h(Fr,null, d.parados.slice(0,20).map(function(c){return row(h(Fr,null,h("b",null,nome(c)),h("span",{style:{color:"var(--muted)"}}," · "+(c.kanban_stages?c.kanban_stages.name:"")+" · parado "+dias(c.last_inbound_at))));}), d.parados.length>20&&h("div",{style:{fontSize:11.5,color:"var(--muted)",marginTop:6}},"+"+(d.parados.length-20)+" outros")))
   );
 }
@@ -2257,7 +2257,7 @@ function OnboardingView({onToast}){
   },[]);
   useEffect(function(){load();},[load]);
   var FASES=["Venda","Form de contrato","Contrato","Briefing","Agendamento","Agendado"];
-  var CORES={"Venda":"#22C55E","Form de contrato":"#6366F1","Contrato":"#F59E0B","Briefing":"#8B5CF6","Agendamento":"#FB923C","Agendado":"#059669"};
+  var CORES={"Venda":"#22C55E","Form de contrato":"#3B101D","Contrato":"#F59E0B","Briefing":"#3B101D","Agendamento":"#FF4D00","Agendado":"#059669"};
   function fase(c){
     if(c.impl_agendado_em)return "Agendado";
     if(c.agendamento_enviado_em||c.briefing_ok_em)return "Agendamento";
@@ -2446,7 +2446,7 @@ function TarefasView({onToast,session}){
 
 /* ===================== AGENDA (semana, 2 closers) ===================== */
 function AgendaView({onToast}){
-  const MCOL={Mateus:"#2563EB",Thiago:"#0E9F6E"};
+  const MCOL={Mateus:"#3B101D",Thiago:"#6B7280"};
   function ymdToday(){ return new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"}); }
   function ymdAdd(ymd,n){ var d=new Date(ymd+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
   function mondayOf(ymd){ var d=new Date(ymd+"T00:00:00Z"); var wd=(d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-wd); return d.toISOString().slice(0,10); }
@@ -2497,7 +2497,7 @@ function AgendaView({onToast}){
                 return h("div",{key:e.id,title:(e.closer||"")+": "+(e.titulo||""),style:{borderLeft:"3px solid "+col,background:"var(--bg)",borderRadius:7,padding:"5px 7px",marginBottom:6}},
                   h("div",{style:{fontSize:11,fontWeight:800,color:col}}, fmtT(e.inicio)+(e.fim?("–"+fmtT(e.fim)):"")),
                   h("div",{style:{fontSize:11.5,fontWeight:600,lineHeight:1.25,color:"var(--ink)",overflow:"hidden"}}, e.titulo||"(sem título)"),
-                  e.meet_link? h("a",{href:e.meet_link,target:"_blank",style:{fontSize:10.5,color:"#2563EB",fontWeight:700}},"Meet") : null
+                  e.meet_link? h("a",{href:e.meet_link,target:"_blank",style:{fontSize:10.5,color:"#3B101D",fontWeight:700}},"Meet") : null
                 );
               })
           );
