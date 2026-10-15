@@ -430,7 +430,7 @@ function LeadsBoard({pipeKey,search,onToast}){
     {label:"Total",value:rows.length},
     {label:"Novos",value:byS("Novo Lead")},
     {label:"Em negociação",value:byS("Em negociação")},
-    {label:"Agendados",value:byS("Agendado")+byS("2ª reunião")},
+    {label:"Agendados",value:byS("Agendado")+byS("2ª reunião")+byS("Reunião confirmada")},
     {label:"Vendas",value:byS("Venda"),color:"#059669"},
     {label:"Alunos",value:byS("Alunos"),color:"var(--gold)"}
   ];
@@ -749,7 +749,7 @@ function ConversationPane({conv,channel,account,userId,stages,onStageChange,onTo
       onOpenFicha&&h("button",{className:"btn ghost sm",style:{marginLeft:8},onClick:onOpenFicha},"📋 Ficha")
     ),
     conv.agenda_link&&h("div",{style:{padding:"8px 12px",background:"var(--gold-soft)",fontSize:12.5,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},"📅 "+fmtDateBR(conv.agenda_inicio),h("a",{href:conv.agenda_link,target:"_blank",style:{color:"#3B101D",fontWeight:700}},"Entrar no Meet")),
-    (!dfHidden && conv.agenda_inicio && new Date(conv.agenda_inicio)<new Date() && !conv.call_status && !conv.call_em && conv.kanban_stages && (conv.kanban_stages.name==="Agendado"||conv.kanban_stages.name==="2ª reunião")) && h("div",{style:{margin:"10px 12px 0",background:"var(--gold-soft)",border:"1px solid var(--gold)",borderRadius:12,padding:"12px 14px"}},
+    (!dfHidden && conv.agenda_inicio && new Date(conv.agenda_inicio)<new Date() && !conv.call_status && !conv.call_em && conv.kanban_stages && (conv.kanban_stages.name==="Agendado"||conv.kanban_stages.name==="2ª reunião"||conv.kanban_stages.name==="Reunião confirmada")) && h("div",{style:{margin:"10px 12px 0",background:"var(--gold-soft)",border:"1px solid var(--gold)",borderRadius:12,padding:"12px 14px"}},
       h("div",{style:{fontSize:12.5,fontWeight:800,color:"var(--gold)",marginBottom:8}},"📞 Como foi a call? ("+fmtDateBR(conv.agenda_inicio)+")"),
       h("textarea",{value:dfFb,onChange:e=>setDfFb(e.target.value),rows:"2",placeholder:"Feedback da call (o que rolou, objeções, próximo passo)...",style:{width:"100%",padding:"9px 11px",border:"1px solid var(--line)",borderRadius:9,fontSize:13.5,background:"var(--card)",color:"var(--ink)",resize:"vertical",marginBottom:8}}),
       h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
@@ -870,7 +870,7 @@ function AgendarModal({conv,nome,onConfirm,onClose,onToast}){
     if(jaFeito){
       setBusy(true);
       var ini = quando ? quando+":00-03:00" : null;
-      try{ await onConfirm({inicio:ini,meet:"",event_id:null,jaFeito:true,origem:origem||null}); }
+      try{ await onConfirm({inicio:ini,meet:"",event_id:null,jaFeito:true,origem:origem||null,closer:closer||null}); }
       catch(e){ setBusy(false); onToast("Erro ao salvar: "+(e.message||e)); }
       return;
     }
@@ -885,7 +885,7 @@ function AgendarModal({conv,nome,onConfirm,onClose,onToast}){
       var r=await fetch(AGENDA_WEBHOOK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conversation_id:conv.id,titulo:titulo,inicio:inicio,fim:fim,descricao:"",calendar_id:(CAL[closer]||null)})});
       var j=await r.json();
       if(!j||!j.ok||!j.event_id)throw new Error("resposta inválida do agendador");
-      await onConfirm({inicio:inicio,meet:j.meet_link||"",event_id:j.event_id,origem:origem||null});
+      await onConfirm({inicio:inicio,meet:j.meet_link||"",event_id:j.event_id,origem:origem||null,closer:closer});
     }catch(e){ setBusy(false); onToast("Erro ao agendar: "+(e.message||e)); }
   };
   var lbl=function(t){ return h("div",{style:{fontSize:12,fontWeight:700,color:"var(--muted)",margin:"12px 0 5px"}},t); };
@@ -898,6 +898,9 @@ function AgendarModal({conv,nome,onConfirm,onClose,onToast}){
       lbl("Origem do lead"),
       h("select",{value:origem,onChange:function(e){setOrigem(e.target.value);},disabled:busy,style:{width:"100%",padding:"10px 12px",border:"1px solid "+(origem?"var(--line)":"#DC2626"),borderRadius:10,fontSize:14,background:"var(--card)",color:"var(--ink)"}},
         [h("option",{key:"_",value:""},"— de onde veio? —")].concat(ORIGENS.map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);}))),
+      lbl("Closer (agenda)"),
+      h("select",{value:closer,onChange:function(e){setCloser(e.target.value);},disabled:busy,style:{width:"100%",padding:"11px 12px",border:"1px solid "+(closer?"var(--line)":"#DC2626"),borderRadius:10,fontSize:14,background:"var(--card)",color:"var(--ink)"}},
+        [h("option",{key:"_",value:""},"— quem vai atender? —")].concat(CLOSERS.map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);}))),
       h("div",{style:{display:"flex",gap:8,marginTop:12}}, segBtn("novo","📅 Agendar + Meet"), segBtn("feito","✅ Já agendou")),
       jaFeito
         ? h(Fr,null,
@@ -906,9 +909,6 @@ function AgendarModal({conv,nome,onConfirm,onClose,onToast}){
             h("input",{type:"datetime-local",value:quando,onChange:function(e){setQuando(e.target.value);},style:{width:"100%",padding:"11px 12px",border:"1px solid var(--line)",borderRadius:10,fontSize:14}})
           )
         : h(Fr,null,
-            lbl("Closer (agenda)"),
-            h("select",{value:closer,onChange:function(e){setCloser(e.target.value);},style:{width:"100%",padding:"11px 12px",border:"1px solid "+(closer?"var(--line)":"#DC2626"),borderRadius:10,fontSize:14,background:"var(--card)",color:"var(--ink)"}},
-              [h("option",{key:"_",value:""},"— quem vai atender? —")].concat(CLOSERS.map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);}))),
             lbl("Data e hora"),
             h("input",{type:"datetime-local",value:quando,onChange:function(e){setQuando(e.target.value);},style:{width:"100%",padding:"11px 12px",border:"1px solid var(--line)",borderRadius:10,fontSize:14}}),
             lbl("Duração"),
@@ -1042,9 +1042,10 @@ function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,
   );
 }
 const PIPELINES={
-  aquisicao:{label:"Aquisição",stages:["Novo Lead","FUP1","FUP2","FUP3","FUP4","Agendado"]},
-  vendas:{label:"Vendas",stages:["Reunião feita","Em negociação","FUP5","FUP6","Assinatura Pendente","Venda","Perdido"]}
+  aquisicao:{label:"Aquisição",stages:["Novo Lead","FUP1","FUP2","FUP3","FUP4","Agendado","Reunião confirmada"]},
+  vendas:{label:"Vendas",stages:["Reunião confirmada","Reunião feita","FUP4","Em negociação","FUP5","FUP6","Assinatura Pendente","Venda","Perdido"]}
 };
+function closerLabel(v){ for(var i=0;i<CLOSERS.length;i++){ if(CLOSERS[i][0]===v)return CLOSERS[i][1]; } return v||""; }
 const ORIGENS=[["social_selling","📸 Social Selling"],["evento_presencial","🎟️ Evento presencial"],["evento_online","💻 Evento online"],["indicacao","🤝 Indicação"],["anuncio","📣 Anúncio"],["whatsapp_direto","💬 WhatsApp direto"],["outros","Outros"]];
 function origemLabel(v){ for(var i=0;i<ORIGENS.length;i++){ if(ORIGENS[i][0]===v)return ORIGENS[i][1]; } return v?v:"—"; }
 function origemBucket(conv){ var o=conv&&conv.origem; if(!o)o=(conv&&conv.channel==="instagram")?"social_selling":"outros"; return o==="social_selling"?"social":(o==="evento_presencial"||o==="evento")?"presencial":o==="evento_online"?"online":"outros"; }
@@ -1137,12 +1138,14 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
   const agendarModal = agendar && h(AgendarModal,{conv:agendar.conv,nome:nameOf(agendar.conv),onClose:()=>setAgendar(null),onToast:onToast,
     onConfirm: async (res)=>{ const cid=agendar.conv.id, to=agendar.to;
       const og=function(c){return res.origem||c.origem;};
-      setConvs(cs=>cs.map(c=>c.id===cid?{...c,stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id,origem:og(c)}:c));
-      setModalConv(m=>m&&m.id===cid?{...m,stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id,origem:og(m)}:m);
-      setSel(s=>s&&s.id===cid?{...s,stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id,origem:og(s)}:s);
+      const cl=function(c){return res.closer||c.closer;};
+      setConvs(cs=>cs.map(c=>c.id===cid?{...c,stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id,origem:og(c),closer:cl(c)}:c));
+      setModalConv(m=>m&&m.id===cid?{...m,stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id,origem:og(m),closer:cl(m)}:m);
+      setSel(s=>s&&s.id===cid?{...s,stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id,origem:og(s),closer:cl(s)}:s);
       setAgendar(null);
       const patch={stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id};
       if(res.origem)patch.origem=res.origem;
+      if(res.closer)patch.closer=res.closer;
       const {error}=await sb.from("conversations").update(patch).eq("id",cid);
       if(error){ onToast((res.jaFeito?"Erro ao salvar: ":"Agendei no Google, mas erro ao salvar: ")+error.message); loadConvs(); }
       else { sb.from("activities").insert([{conversation_id:cid,actor_id:userId,type:"stage_change",payload:{to:to,agendado:res.inicio,ja_feito:!!res.jaFeito}}]); onToast(res.jaFeito?"Marcado como agendado ✓":"Agendado! Meet criado ✓"); }
@@ -1179,7 +1182,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
     const sumItems=[
       {label:"Total",value:convs.length},
       {label:"Em negociação",value:byName("Em negociação")},
-      {label:"Agendados",value:byName("Agendado")+byName("2ª reunião")},
+      {label:"Agendados",value:byName("Agendado")+byName("2ª reunião")+byName("Reunião confirmada")},
       {label:"Vendas",value:byName("Venda"),color:"#059669"},
       rFunil>0&&{label:"R$ no funil",value:brl(rFunil),color:"#059669"},
       parados>0&&{label:"Parados +3d",value:parados,color:"#DC2626"}
@@ -1207,7 +1210,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
                     )
                   ),
                   c.next_action&&h("div",{style:{fontSize:12.5,marginTop:7,color:"var(--gold)"}},"⏭ ",c.next_action,c.next_action_at?(" · "+fmtDateBR(c.next_action_at)):""),
-                  c.agenda_inicio&&h("div",{style:{fontSize:12,marginTop:7,color:"#3B101D",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},"📅 "+fmtDateBR(c.agenda_inicio), c.agenda_link&&h("a",{href:c.agenda_link,target:"_blank",onClick:e=>e.stopPropagation(),style:{color:"#3B101D",fontWeight:600}},"Meet")),
+                  c.agenda_inicio&&h("div",{style:{fontSize:12,marginTop:7,color:"#3B101D",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},"📅 "+fmtDateBR(c.agenda_inicio), c.closer&&h("span",{style:{fontWeight:700}},"· 🧑‍💼 "+closerLabel(c.closer)), c.agenda_link&&h("a",{href:c.agenda_link,target:"_blank",onClick:e=>e.stopPropagation(),style:{color:"#3B101D",fontWeight:600}},"Meet")),
                   (hasVal||stale||tags.length>0||c.garantia===true||c.garantia===false)&&h("div",{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:7}},
                     c.produto&&h("span",{className:"tag",style:{background:"#EFEAE3",color:"#3B101D"}},c.produto),
                     (c.garantia===true||c.garantia===false)&&h("span",{className:"tag",style:{background:c.garantia?"#ECFDF5":"#FEF2F2",color:c.garantia?"#059669":"#DC2626"}},c.garantia?"C/ garantia":"S/ garantia"),
@@ -1246,7 +1249,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
           var lista=convs.filter(c=>cmatch(c)&&(!stageFilter||c.stage_id===stageFilter)&&(stageFilter||!(c.kanban_stages&&(c.kanban_stages.name==="Não comercial"||ocultoNames[c.kanban_stages.name])))).slice().sort(function(a,b){return rowPrio(b)-rowPrio(a);});
           var nHot=lista.filter(isHot).length, nSug=lista.filter(function(c){return hasSug(c)&&!isHot(c);}).length;
           var mark=function(c){ return isHot(c)?" 🔥":(hasSug(c)?" ✨":""); };
-          var pend=(convs||[]).filter(function(c){return c.agenda_inicio&&new Date(c.agenda_inicio)<new Date()&&!c.call_status&&!c.call_em&&c.kanban_stages&&(c.kanban_stages.name==="Agendado"||c.kanban_stages.name==="2ª reunião");});
+          var pend=(convs||[]).filter(function(c){return c.agenda_inicio&&new Date(c.agenda_inicio)<new Date()&&!c.call_status&&!c.call_em&&c.kanban_stages&&(c.kanban_stages.name==="Agendado"||c.kanban_stages.name==="2ª reunião"||c.kanban_stages.name==="Reunião confirmada");});
           var dfBtn=function(c,tipo,label,bg){ return h("button",{className:"btn ghost sm",style:{padding:"5px 8px",fontSize:11.5,fontWeight:700,background:bg||"var(--card)",color:bg?"#fff":"var(--ink)",border:bg?"none":"1px solid var(--line)"},onClick:function(e){e.stopPropagation();marcarDesfecho(c,tipo);}},label); };
           return [
             pend.length>0&&h("div",{key:"desfbox",style:{margin:"0 0 10px",padding:"10px 11px",background:"rgba(59,16,29,.08)",border:"1px solid #3B101D",borderRadius:10}},
@@ -1846,7 +1849,7 @@ function FunilTable(){
     var by={};
     (cv.data||[]).forEach(function(c){ var fn=funilOf(c); var st=c.kanban_stages||{}; var nm=st.name;
       var x=by[fn]||(by[fn]={funil:fn,agendados:0,reunioes:0,vendas:0});
-      x.agendados++; if(nm!=="FUP4"&&nm!=="Agendado")x.reunioes++; if(st.is_won||c.venda_em)x.vendas++; });
+      x.agendados++; if(nm!=="FUP4"&&nm!=="Agendado"&&nm!=="Reunião confirmada")x.reunioes++; if(st.is_won||c.venda_em)x.vendas++; });
     var arr=Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){return b.agendados-a.agendados;});
     if(!cancel)setRows(arr);
   })(); return function(){cancel=true;}; },[dias]);
@@ -2216,7 +2219,7 @@ function RotinaCrisView({onToast}){
       var d3=new Date(Date.now()-3*86400000).toISOString();
       var t0=hojeStr()+"T00:00:00-03:00", t1=hojeStr()+"T23:59:59-03:00";
       var des=await sb.from("conversations").select("id,agenda_inicio,contacts(full_name,username,phone),kanban_stages(name)").in("channel",["instagram","whatsapp"]).lt("agenda_inicio",now).is("call_status",null).is("call_em",null);
-      var desf=(des.data||[]).filter(function(c){return c.kanban_stages&&(c.kanban_stages.name==="Agendado"||c.kanban_stages.name==="2ª reunião");});
+      var desf=(des.data||[]).filter(function(c){return c.kanban_stages&&(c.kanban_stages.name==="Agendado"||c.kanban_stages.name==="2ª reunião"||c.kanban_stages.name==="Reunião confirmada");});
       var con=await sb.from("conversations").select("deal_value,contrato_enviado_em,contacts(full_name,phone)").eq("contrato_status","pending").is("contrato_assinado_em",null).order("contrato_enviado_em");
       var par=await sb.from("conversations").select("id,last_inbound_at,contacts(full_name,username),kanban_stages(name,is_won,is_lost,oculto)").in("channel",["instagram","whatsapp"]).eq("is_archived",false).lt("last_inbound_at",d3);
       var parados=(par.data||[]).filter(function(c){return c.kanban_stages&&!c.kanban_stages.is_won&&!c.kanban_stages.is_lost&&!c.kanban_stages.oculto&&c.kanban_stages.name!=="Novo Lead"&&c.kanban_stages.name!=="Nutrição";});
