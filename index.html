@@ -2332,6 +2332,56 @@ function OnbModal({c,onClose,onToast,reload}){
 }
 
 /* ===================== MENTORADOS ===================== */
+function TrafegoView({onToast}){
+  const ETAPAS=["Aguardando acessos","Briefing","Em construção","Campanha no ar","Acompanhamento"];
+  const [rows,setRows]=useState(null);
+  const [drag,setDrag]=useState(null),[over,setOver]=useState(null);
+  const [det,setDet]=useState(null),[nota,setNota]=useState("");
+  const load=useCallback(async function(){
+    var m=await sb.from("mentorados").select("*").eq("is_trafego",true).order("criado_em",{ascending:false});
+    setRows(m.data||[]);
+  },[]);
+  useEffect(function(){load();},[load]);
+  async function mover(m,etapa){ setRows(function(cs){return (cs||[]).map(function(x){return x.id===m.id?Object.assign({},x,{trafego_etapa:etapa}):x;});}); try{ await sb.from("mentorados").update({trafego_etapa:etapa}).eq("id",m.id); }catch(e){ onToast&&onToast("Erro ao mover: "+e.message); load(); } }
+  async function salvar(m){ await sb.from("mentorados").update({notas:nota}).eq("id",m.id); onToast&&onToast("Salvo ✓"); setRows(function(cs){return (cs||[]).map(function(x){return x.id===m.id?Object.assign({},x,{notas:nota}):x;});}); }
+  if(rows===null)return h("div",{className:"center",style:{height:"50vh"}},h("div",{className:"spin"}));
+  var dig=function(s){ return String(s||"").replace(/[^0-9]/g,""); };
+  var cols=[{key:"__none",label:"A classificar",stage:null}].concat(ETAPAS.map(function(s){return {key:s,label:s,stage:s};}));
+  var inCol=function(m,c){ return c.stage===null ? !m.trafego_etapa : m.trafego_etapa===c.stage; };
+  var resumo=function(m){ var ls=String(m.notas||"").split("\n").filter(function(l){return l.indexOf("[Tráfego]")>=0;}).map(function(l){return l.replace("[Tráfego]","").trim();}); return ls.length?ls.join(" · "):String(m.notas||"").slice(0,90); };
+  var card=function(m){
+    return h("div",{key:m.id,className:"card",draggable:true,style:(drag&&drag.id===m.id?{opacity:.5}:null),
+      onDragStart:function(){setDrag(m);}, onDragEnd:function(){setDrag(null);},
+      onClick:function(){ setDet(m); setNota(m.notas||""); }},
+      h("div",{style:{fontWeight:700,fontSize:13}},m.nome||"(sem nome)"),
+      resumo(m)&&h("div",{style:{fontSize:11.5,color:"var(--muted)",marginTop:4}},resumo(m))
+    );
+  };
+  return h(Fr,null,
+    h("div",{style:{padding:"16px 16px 8px"}},
+      h("h2",{style:{fontSize:20,margin:0}},"🚀 Tráfego — Entrega ("+rows.length+")"),
+      h("div",{style:{fontSize:12,color:"var(--muted)",marginTop:4}},"Clientes done-for-you de tráfego. Arraste pela entrega. Clique pra ver/editar as pendências.")),
+    h(BoardScroller,null, cols.map(function(c){ var items=rows.filter(function(m){return inCol(m,c);});
+      return h("div",{key:c.key,className:"col"+(over===c.key?" drop":""),
+        onDragOver:function(e){e.preventDefault();setOver(c.key);}, onDragLeave:function(){setOver(function(o){return o===c.key?null:o;});},
+        onDrop:function(e){e.preventDefault(); if(drag)mover(drag,c.stage); setDrag(null); setOver(null);}},
+        h("div",{className:"col-head"},h("span",{className:"name"},c.label),h("span",{className:"count"},items.length)),
+        h("div",{className:"col-body"}, items.map(card))
+      );
+    })),
+    det&&h("div",{className:"overlay",onClick:function(){setDet(null);}},
+      h("div",{className:"modal",style:{maxWidth:460},onClick:function(e){e.stopPropagation();}},
+        h("h3",null,det.nome||"Cliente"),
+        h("div",{style:{fontSize:12.5,color:"var(--muted)",marginBottom:12}},(det.trafego_etapa||"A classificar")+(det.email?" · "+det.email:"")),
+        dig(det.whatsapp)&&h("a",{className:"btn ghost sm",href:"https://wa.me/"+dig(det.whatsapp),target:"_blank"},"💬 WhatsApp"),
+        h("div",{style:{fontSize:12,fontWeight:700,color:"var(--muted)",margin:"14px 0 5px"}},"Pendências / notas"),
+        h("textarea",{value:nota,onChange:function(e){setNota(e.target.value);},rows:"5",style:{width:"100%",padding:"9px 11px",border:"1px solid var(--line)",borderRadius:9,fontSize:13.5,background:"var(--card)",color:"var(--ink)",resize:"vertical"}}),
+        h("div",{style:{display:"flex",gap:8,marginTop:12}},
+          h("button",{className:"btn gold",onClick:function(){salvar(det);setDet(null);}},"Salvar"),
+          h("button",{className:"btn ghost",onClick:function(){setDet(null);}},"Fechar"))
+      ))
+  );
+}
 function MentoradosView({onToast}){
   const JORNADA=["Briefing","Call de onboarding","Setup","Posicionamento","Produto","Call de implementação","Venda","Escala","Live entrevista"];
   const [ment,setMent]=useState(null);
@@ -2530,7 +2580,7 @@ function Shell({session}){
     ["Hoje",[["painel","Painel"],["rotinacris","Rotina do dia"],["rotina","Minhas tarefas"]]],
     ["Comercial",[["total","Pipeline"],["lowticket","Low ticket"],["agenda","Agenda"],["contatos","Contatos"]]],
     ["Prospecção",[["ig","Instagram"],["whatsapp_cris","WhatsApp"]]],
-    ["Entrega",[["onboarding","Onboarding"],["mentorados","Mentorados"],["cs","Clientes & CS"]]],
+    ["Entrega",[["onboarding","Onboarding"],["mentorados","Mentorados"],["trafego","Tráfego"],["cs","Clientes & CS"]]],
     ["Gestão",[["relatorio","Desempenho"],["tarefas","Tarefas"],["time","Time"],["pesquisa","Pesquisa"]]]
   ];
   var ADMIN_ONLY={time:1,relatorio:1};
@@ -2577,6 +2627,7 @@ function Shell({session}){
       tab==="agenda"&&h(AgendaView,{onToast:onToast}),
       tab==="tarefas"&&h(TarefasView,{onToast:onToast,session:session}),
       tab==="mentorados"&&h(MentoradosView,{onToast:onToast}),
+      tab==="trafego"&&h(TrafegoView,{onToast:onToast}),
       tab==="rotinacris"&&h(RotinaCrisView,{onToast:onToast}),
       tab==="lowticket"&&h(LowTicketBoard,{search:search,onToast:onToast,userId:session.user.id}),
       tab==="contatos"&&h(ContatosView,{search:search,onToast:onToast}),
