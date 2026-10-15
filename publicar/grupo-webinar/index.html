@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reino · Grupo do Webinar</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{--vinho:#3B101D;--laranja:#FF4D00;--branco:#F5F3ED}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Manrope,system-ui,sans-serif;background:var(--vinho);color:var(--branco);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
+  .box{max-width:440px;width:100%}
+  .spin{width:40px;height:40px;border:3px solid rgba(245,243,237,.22);border-top-color:var(--laranja);border-radius:50%;animation:s 1s linear infinite;margin:0 auto 22px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .eye{font-family:Manrope;font-size:11px;letter-spacing:2.5px;color:var(--laranja);font-weight:800;margin-bottom:14px}
+  h1{font-family:Anton,sans-serif;font-weight:400;font-size:30px;line-height:1.1;letter-spacing:.5px;margin-bottom:14px;text-transform:uppercase}
+  p{opacity:.85;font-size:15px;line-height:1.55;margin-bottom:26px}
+  .btn{display:inline-block;background:var(--laranja);color:var(--vinho);font-weight:800;text-decoration:none;padding:17px 30px;border-radius:13px;font-size:16px;box-shadow:0 10px 28px rgba(255,77,0,.3)}
+  .small{margin-top:20px;font-size:12px;opacity:.5}
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="spin"></div>
+    <div class="eye">REINO · VENDAS &amp; IA</div>
+    <h1>Entrando no grupo do webinar</h1>
+    <p>Em instantes você é direcionado pro grupo oficial, onde vai receber o link de acesso ao vivo. Se não abrir sozinho, é só tocar no botão abaixo.</p>
+    <a class="btn" id="go" href="https://chat.whatsapp.com/BYwchbJogla04vqeK6yxvB" rel="noopener">Entrar no grupo agora →</a>
+    <div class="small">Reino Assessoria e Treinamentos</div>
+  </div>
+  <script>
+    var LINK = "https://chat.whatsapp.com/BYwchbJogla04vqeK6yxvB";
+    document.getElementById("go").setAttribute("href", LINK);
+    setTimeout(function(){ window.location.href = LINK; }, 1200);
+  </script>
+</body>
+</html>
