@@ -1063,6 +1063,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
   const [stageFilter,setStageFilter]=useState("");
   const [drag,setDrag]=useState(null),[over,setOver]=useState(null),[agendar,setAgendar]=useState(null),[venda,setVenda]=useState(null);
   const [pipeSel,setPipeSel]=useState("tudo");
+  const [closerSel,setCloserSel]=useState("");
 
   const loadStages=useCallback(async()=>{ const {data}=await sb.from("kanban_stages").select("*").order("position"); setStages(data||[]); },[]);
   const loadConvs=useCallback(async()=>{
@@ -1189,9 +1190,9 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
     ];
     return h(Fr,null,
       h(Summary,{items:sumItems}),
-      h("div",{className:"subtabs"},["tudo","aquisicao","vendas"].map(function(pk){return h("button",{key:pk,className:"subtab"+(pipeSel===pk?" active":""),onClick:function(){setPipeSel(pk);}},pk==="tudo"?"Tudo":PIPELINES[pk].label);})),
+      h("div",{className:"subtabs"},["tudo","aquisicao","vendas"].map(function(pk){return h("button",{key:pk,className:"subtab"+(pipeSel===pk?" active":""),onClick:function(){setPipeSel(pk);}},pk==="tudo"?"Tudo":PIPELINES[pk].label);}).concat([h("span",{key:"cllbl",style:{alignSelf:"center",fontSize:11,color:"var(--muted)",margin:"0 4px 0 12px"}},"Closer:"),h("button",{key:"cl_all",className:"subtab"+(closerSel===""?" active":""),onClick:function(){setCloserSel("");}},"Todos")].concat(CLOSERS.map(function(o){return h("button",{key:"cl_"+o[0],className:"subtab"+(closerSel===o[0]?" active":""),onClick:function(){setCloserSel(o[0]);}},o[1]);})))),
       h(BoardScroller,null,
-        stagesForPipe(stages,pipeSel).map(st=>{ const cards=convs.filter(c=>c.stage_id===st.id&&cmatch(c));
+        stagesForPipe(stages,pipeSel).map(st=>{ const cards=convs.filter(c=>c.stage_id===st.id&&cmatch(c)&&(!closerSel||c.closer===closerSel));
           return h("div",{key:st.id,className:"col"+(over===st.id?" drop":""),
             onDragOver:e=>{e.preventDefault();setOver(st.id);},onDragLeave:()=>setOver(o=>o===st.id?null:o),
             onDrop:e=>{e.preventDefault();setOver(null);if(drag)moveStage(drag,st.id);setDrag(null);}},
@@ -1246,7 +1247,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
         convs&&convs.length===0&&h("div",{className:"empty"},"Nenhuma conversa ainda.",h("br"),channel==="whatsapp"?"Aparecem aqui quando o WhatsApp da Cris estiver conectado.":"Aparecem aqui quando o Instagram estiver conectado."),
         convs&&(function(){
           var ocultoNames={}; (stages||[]).forEach(function(s){if(s.oculto)ocultoNames[s.name]=1;});
-          var lista=convs.filter(c=>cmatch(c)&&(!stageFilter||c.stage_id===stageFilter)&&(stageFilter||!(c.kanban_stages&&(c.kanban_stages.name==="Não comercial"||ocultoNames[c.kanban_stages.name])))).slice().sort(function(a,b){return rowPrio(b)-rowPrio(a);});
+          var lista=convs.filter(c=>cmatch(c)&&(!closerSel||c.closer===closerSel)&&(!stageFilter||c.stage_id===stageFilter)&&(stageFilter||!(c.kanban_stages&&(c.kanban_stages.name==="Não comercial"||ocultoNames[c.kanban_stages.name])))).slice().sort(function(a,b){return rowPrio(b)-rowPrio(a);});
           var nHot=lista.filter(isHot).length, nSug=lista.filter(function(c){return hasSug(c)&&!isHot(c);}).length;
           var mark=function(c){ return isHot(c)?" 🔥":(hasSug(c)?" ✨":""); };
           var pend=(convs||[]).filter(function(c){return c.agenda_inicio&&new Date(c.agenda_inicio)<new Date()&&!c.call_status&&!c.call_em&&c.kanban_stages&&(c.kanban_stages.name==="Agendado"||c.kanban_stages.name==="2ª reunião"||c.kanban_stages.name==="Reunião confirmada");});
@@ -1287,6 +1288,7 @@ function TotalBoard({search,account,userId,onToast}){
   const [modalConv,setModalConv]=useState(null),[editLead,setEditLead]=useState(null);
   const [pendMerge,setPendMerge]=useState(null),[mergeOver,setMergeOver]=useState(null);
   const [pipeSel,setPipeSel]=useState("tudo");
+  const [closerSel,setCloserSel]=useState("");
   const loadAll=useCallback(async()=>{
     const s=await sb.from("kanban_stages").select("*").order("position"); setStages(s.data||[]);
     const cv=await sb.from("conversations").select("*, contacts(*), kanban_stages(name,color)").eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}); setConvs(cv.data||[]);
@@ -1353,7 +1355,7 @@ function TotalBoard({search,account,userId,onToast}){
     h(Summary,{items:sumItems}),
     h("div",{className:"subtabs"},["tudo","aquisicao","vendas"].map(function(pk){return h("button",{key:pk,className:"subtab"+(pipeSel===pk?" active":""),onClick:function(){setPipeSel(pk);}},pk==="tudo"?"Tudo":PIPELINES[pk].label);})),
     h(BoardScroller,null, stagesForPipe(stages,pipeSel).map(st=>{
-      const cards=items.filter(it=>it.stageName===st.name&&match(it));
+      const cards=items.filter(it=>it.stageName===st.name&&match(it)&&(!closerSel||(it.raw&&it.raw.closer===closerSel)));
       return h("div",{key:st.id,className:"col"+(over===st.name?" drop":""),
         onDragOver:e=>{e.preventDefault();setOver(st.name);},onDragLeave:()=>setOver(o=>o===st.name?null:o),
         onDrop:e=>{e.preventDefault();setOver(null);if(drag)move(drag,st.name,st.id);setDrag(null);}},
