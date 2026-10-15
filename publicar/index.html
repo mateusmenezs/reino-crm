@@ -2337,10 +2337,11 @@ function OnbModal({c,onClose,onToast,reload}){
 function TrafegoView({onToast}){
   const ETAPAS=["Aguardando acessos","Briefing","Em construção","Campanha no ar","Acompanhamento"];
   const [rows,setRows]=useState(null);
+  const [filtro,setFiltro]=useState("todos");
   const [drag,setDrag]=useState(null),[over,setOver]=useState(null);
   const [det,setDet]=useState(null),[nota,setNota]=useState("");
   const load=useCallback(async function(){
-    var m=await sb.from("mentorados").select("*").eq("is_trafego",true).order("criado_em",{ascending:false});
+    var m=await sb.from("mentorados").select("*").order("criado_em",{ascending:false});
     setRows(m.data||[]);
   },[]);
   useEffect(function(){load();},[load]);
@@ -2359,11 +2360,14 @@ function TrafegoView({onToast}){
       resumo(m)&&h("div",{style:{fontSize:11.5,color:"var(--muted)",marginTop:4}},resumo(m))
     );
   };
+  var vis = filtro==="trafego" ? rows.filter(function(m){return m.is_trafego;}) : rows;
+  var chip=function(val,label){ return h("button",{key:val,className:"subtab"+(filtro===val?" active":""),onClick:function(){setFiltro(val);}},label); };
   return h(Fr,null,
     h("div",{style:{padding:"16px 16px 8px"}},
-      h("h2",{style:{fontSize:20,margin:0}},"🚀 Tráfego — Entrega ("+rows.length+")"),
-      h("div",{style:{fontSize:12,color:"var(--muted)",marginTop:4}},"Clientes done-for-you de tráfego. Arraste pela entrega. Clique pra ver/editar as pendências.")),
-    h(BoardScroller,null, cols.map(function(c){ var items=rows.filter(function(m){return inCol(m,c);});
+      h("h2",{style:{fontSize:20,margin:0}},"👥 Clientes ("+vis.length+")"),
+      h("div",{style:{fontSize:12,color:"var(--muted)",marginTop:4}},"Arraste o cliente pela entrega. Clique pra ver/editar as pendências."),
+      h("div",{className:"subtabs",style:{padding:"8px 0 0"}}, chip("todos","Todos"), chip("trafego","🚀 Tráfego"))),
+    h(BoardScroller,null, cols.map(function(c){ var items=vis.filter(function(m){return inCol(m,c);});
       return h("div",{key:c.key,className:"col"+(over===c.key?" drop":""),
         onDragOver:function(e){e.preventDefault();setOver(c.key);}, onDragLeave:function(){setOver(function(o){return o===c.key?null:o;});},
         onDrop:function(e){e.preventDefault(); if(drag)mover(drag,c.stage); setDrag(null); setOver(null);}},
@@ -2582,7 +2586,7 @@ function Shell({session}){
     ["Hoje",[["painel","Painel"],["rotinacris","Rotina do dia"],["rotina","Minhas tarefas"]]],
     ["Comercial",[["total","Pipeline"],["lowticket","Low ticket"],["agenda","Agenda"],["contatos","Contatos"]]],
     ["Prospecção",[["ig","Instagram"],["whatsapp_cris","WhatsApp"]]],
-    ["Entrega",[["onboarding","Onboarding"],["mentorados","Mentorados"],["trafego","Tráfego"],["cs","Clientes & CS"]]],
+    ["Entrega",[["onboarding","Onboarding"],["mentorados","Mentorados"],["trafego","Clientes"],["cs","CS / Pagamentos"]]],
     ["Gestão",[["relatorio","Desempenho"],["tarefas","Tarefas"],["time","Time"],["pesquisa","Pesquisa"]]]
   ];
   var ADMIN_ONLY={time:1,relatorio:1};
