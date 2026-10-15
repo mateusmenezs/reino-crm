@@ -2584,7 +2584,7 @@ function Shell({session}){
   const isAdmin = me && me.role==="admin";
   var GROUPS=[
     ["Hoje",[["painel","Painel"],["rotinacris","Rotina do dia"],["rotina","Minhas tarefas"]]],
-    ["Comercial",[["total","Pipeline"],["lowticket","Low ticket"],["agenda","Agenda"],["contatos","Contatos"]]],
+    ["Comercial",[["total","Pipeline"],["lowticket","Low ticket"],["agenda","Agenda"],["contatos","Contatos"],["playbooks","Playbooks ↗"]]],
     ["Prospecção",[["ig","Instagram"],["whatsapp_cris","WhatsApp"]]],
     ["Entrega",[["onboarding","Onboarding"],["mentorados","Mentorados"],["trafego","Clientes"],["cs","CS / Pagamentos"]]],
     ["Gestão",[["relatorio","Desempenho"],["tarefas","Tarefas"],["time","Time"],["pesquisa","Pesquisa"]]]
@@ -2603,7 +2603,7 @@ function Shell({session}){
         h("span",{className:"nm"},"Reino ",h("b",null,"CRM"))),
       h("nav",{className:"sb-nav"},visGroups.map(function(g){ return [
         h("div",{className:"sb-label",key:"lbl-"+g[0]},g[0]),
-        g[1].map(function(t){ var k=t[0],l=t[1]; return h("button",{key:k,className:"tab"+(tab===k?" active":""),onClick:function(){setTab(k);}},l); })
+        g[1].map(function(t){ var k=t[0],l=t[1]; return h("button",{key:k,className:"tab"+(tab===k?" active":""),onClick:function(){ if(k==="playbooks"){ window.open("https://hub-reino.pages.dev/playbooks/","_blank","noopener"); } else { setTab(k); } }},l); })
       ]; })),
       h("div",{className:"sb-foot"},
         h("div",{className:"av"},((me&&me.full_name?me.full_name:session.user.email)||"?").slice(0,2).toUpperCase()),
