@@ -2334,6 +2334,27 @@ function OnbModal({c,onClose,onToast,reload}){
 }
 
 /* ===================== MENTORADOS ===================== */
+function ContratosPresosView({onToast}){
+  const [rows,setRows]=useState(null);
+  const load=useCallback(async function(){ var r=await sb.from('contrato_pendencias').select('*').eq('status','aguardando').order('atualizado_em',{ascending:false}); setRows(r.data||[]); },[]);
+  useEffect(function(){load();},[load]);
+  var dig=function(s){ return String(s||"").replace(/[^0-9]/g,""); };
+  if(rows===null)return h("div",{className:"center",style:{height:"50vh"}},h("div",{className:"spin"}));
+  return h(Fr,null,
+    h("div",{style:{padding:"16px 16px 8px"}},
+      h("h2",{style:{fontSize:20,margin:0}},"📄 Contratos presos ("+rows.length+")"),
+      h("div",{style:{fontSize:12,color:"var(--muted)",marginTop:4}},"Preencheram o form mas o contrato não saiu. Complete/ajuste o card (ou o telefone/e-mail do contato) — o sistema gera sozinho em até 15 min.")),
+    h("div",{style:{padding:"4px 16px 24px",maxWidth:720}},
+      rows.length===0 ? h("div",{className:"empty",style:{padding:20}},"Nenhum contrato preso 🎉") :
+      rows.map(function(p){ return h("div",{key:p.id,style:{background:"var(--card)",border:"1px solid var(--line)",borderRadius:12,padding:"12px 14px",marginBottom:10}},
+        h("div",{style:{fontWeight:700,fontSize:14}},p.contato_nome||"(sem nome)"),
+        h("div",{style:{fontSize:12.5,color:"var(--muted)",marginTop:3}}, (p.telefone?("📞 "+p.telefone):"")+(p.email?("  ·  ✉ "+p.email):"") ),
+        p.falta&&h("div",{style:{marginTop:7,fontSize:12.5}},"Falta: ",h("b",{style:{color:"#DC2626"}}, Array.isArray(p.falta)?p.falta.join(", "):String(p.falta))),
+        dig(p.telefone)&&h("a",{className:"btn ghost sm",href:"https://wa.me/"+dig(p.telefone),target:"_blank",style:{marginTop:8}},"💬 WhatsApp")
+      ); })
+    )
+  );
+}
 function TrafegoView({onToast}){
   const ETAPAS=["Aguardando acessos","Briefing","Em construção","Campanha no ar","Acompanhamento"];
   const [rows,setRows]=useState(null);
@@ -2584,7 +2605,7 @@ function Shell({session}){
   const isAdmin = me && me.role==="admin";
   var GROUPS=[
     ["Hoje",[["painel","Painel"],["rotinacris","Rotina do dia"],["rotina","Minhas tarefas"]]],
-    ["Comercial",[["total","Pipeline"],["lowticket","Low ticket"],["agenda","Agenda"],["contatos","Contatos"],["playbooks","Playbooks ↗"]]],
+    ["Comercial",[["total","Pipeline"],["lowticket","Low ticket"],["agenda","Agenda"],["contatos","Contatos"],["contratos","Contratos presos"],["playbooks","Playbooks ↗"]]],
     ["Prospecção",[["ig","Instagram"],["whatsapp_cris","WhatsApp"]]],
     ["Entrega",[["onboarding","Onboarding"],["mentorados","Mentorados"],["trafego","Clientes"],["cs","CS / Pagamentos"]]],
     ["Gestão",[["relatorio","Desempenho"],["tarefas","Tarefas"],["time","Time"],["pesquisa","Pesquisa"]]]
@@ -2634,6 +2655,7 @@ function Shell({session}){
       tab==="tarefas"&&h(TarefasView,{onToast:onToast,session:session}),
       tab==="mentorados"&&h(MentoradosView,{onToast:onToast}),
       tab==="trafego"&&h(TrafegoView,{onToast:onToast}),
+      tab==="contratos"&&h(ContratosPresosView,{onToast:onToast}),
       tab==="rotinacris"&&h(RotinaCrisView,{onToast:onToast}),
       tab==="lowticket"&&h(LowTicketBoard,{search:search,onToast:onToast,userId:session.user.id}),
       tab==="contatos"&&h(ContatosView,{search:search,onToast:onToast}),
