@@ -710,11 +710,36 @@ function CSBoard({search,onToast,isAdmin}){
   );
 }
 
+/* ===================== JP NO INSTAGRAM: chave geral (crm_config.ig_jp_ativo) ===================== */
+function JPSwitch({onToast}){
+  const [on,setOn]=useState(null),[busy,setBusy]=useState(false);
+  useEffect(()=>{ sb.from("crm_config").select("valor").eq("chave","ig_jp_ativo").limit(1).then(function(r){ var v=r.data&&r.data[0]?r.data[0].valor:"true"; setOn(v!=="false"); }); },[]);
+  const toggle=async()=>{ if(on===null||busy)return; const nv=!on;
+    if(!nv&&!window.confirm("Desligar o JP no Instagram? Ele para de responder todas as conversas até você ligar de novo."))return;
+    setBusy(true);
+    const {error}=await sb.from("crm_config").upsert({chave:"ig_jp_ativo",valor:nv?"true":"false",atualizado_em:new Date().toISOString()});
+    setBusy(false);
+    if(error){onToast&&onToast("Não consegui mudar: "+error.message);return;}
+    setOn(nv); onToast&&onToast(nv?"JP ligado no Instagram 🤖":"JP desligado no Instagram");
+  };
+  if(on===null)return null;
+  return h("button",{className:"subtab",onClick:toggle,disabled:busy,title:"Liga/desliga o JP (SDR IA) em todas as conversas do Instagram",
+    style:{marginLeft:"auto",fontWeight:700,color:on?"#047857":"#B91C1C",border:"1px solid "+(on?"#10B981":"#F87171"),background:on?"rgba(16,185,129,.10)":"rgba(248,113,113,.10)"}},
+    on?"🤖 JP ligado":"⏸ JP desligado");
+}
+
 /* ===================== PAINEL DE CONVERSA (reusável: inbox e modal) ===================== */
 function ConversationPane({conv,channel,account,userId,stages,onStageChange,onToast,onOpenFicha,stageField="stage_id"}){
   const [msgs,setMsgs]=useState(null),[text,setText]=useState("");
   const [sugHidden,setSugHidden]=useState(false);
   const [dfHidden,setDfHidden]=useState(false),[dfFb,setDfFb]=useState("");
+  const [jpOn,setJpOn]=useState(conv.ia_ativa!==false);
+  useEffect(()=>{ setJpOn(conv.ia_ativa!==false); },[conv.id,conv.ia_ativa]);
+  const toggleJP=async()=>{ const nv=!jpOn; setJpOn(nv);
+    const {error}=await sb.from("conversations").update({ia_ativa:nv}).eq("id",conv.id);
+    if(error){setJpOn(!nv); onToast&&onToast("Não consegui mudar: "+error.message); return;}
+    onToast&&onToast(nv?"JP ligado nesta conversa 🤖":"JP desligado nesta conversa");
+  };
   const endRef=useRef(null);
   const load=useCallback(async()=>{ const {data}=await sb.from("messages").select("*").eq("conversation_id",conv.id).order("created_at"); setMsgs(data||[]);
     if(conv.unread_count>0) sb.from("conversations").update({unread_count:0}).eq("id",conv.id);
@@ -745,6 +770,8 @@ function ConversationPane({conv,channel,account,userId,stages,onStageChange,onTo
         style:{padding:"7px 10px",border:"1px solid var(--line)",borderRadius:8,fontSize:13,fontWeight:600,maxWidth:150,background:"var(--card)"}},
         stages.map(s=>h("option",{key:s.id,value:s.id},s.label||s.name))
       ),
+      channel==="instagram"&&h("button",{className:"btn ghost sm",onClick:toggleJP,title:jpOn?"O JP (SDR IA) pode responder esta conversa. Clique pra desligar.":"O JP não responde esta conversa. Clique pra ligar.",
+        style:{marginLeft:8,fontWeight:700,color:jpOn?"#047857":"#B91C1C",borderColor:jpOn?"#10B981":"#F87171"}},jpOn?"🤖 JP on":"⏸ JP off"),
       (channel==="instagram"&&ct.username&&!isNumId(ct.username))&&h("a",{className:"btn ghost sm",style:{marginLeft:8},target:"_blank",href:"https://ig.me/m/"+ct.username,title:"Abrir o direct nessa pessoa"},"💬 Abrir DM"),
       onOpenFicha&&h("button",{className:"btn ghost sm",style:{marginLeft:8},onClick:onOpenFicha},"📋 Ficha")
     ),
@@ -2649,7 +2676,8 @@ function Shell({session}){
       ),
       isChannel&&h("div",{className:"subtabs"},
         h("button",{className:"subtab"+(sub==="inbox"?" active":""),onClick:()=>setSub("inbox")},"📥 Inbox"),
-        h("button",{className:"subtab"+(sub==="pipe"?" active":""),onClick:()=>setSub("pipe")},"📊 Pipeline")
+        h("button",{className:"subtab"+(sub==="pipe"?" active":""),onClick:()=>setSub("pipe")},"📊 Pipeline"),
+        tab==="ig"&&h(JPSwitch,{key:"jpsw",onToast:onToast})
       ),
       tab==="ig"&&h(ChannelView,{channel:"instagram",sub:sub,search:search,account:account,userId:session.user.id,onToast:onToast}),
       tab==="whatsapp_cris"&&h(ChannelView,{channel:"whatsapp",sub:sub,search:search,account:account,userId:session.user.id,onToast:onToast}),
