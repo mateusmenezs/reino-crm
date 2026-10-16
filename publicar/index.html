@@ -796,7 +796,8 @@ function LeadFicha({conv,onToast,onSaved}){
     next_action:conv.next_action||"", next_action_at:conv.next_action_at||"",
     notes:conv.notes||"", tags:((conv.contacts&&conv.contacts.tags)||[]).join(", "), funil:conv.funil||"", origem:conv.origem||"",
     nicho:q0.nicho||"", momento:q0.momento||"", desafio:q0.desafio||"", objetivo:q0.objetivo||"", objecao:q0.objecao||"",
-    maior_trava:q0.maior_trava||"", sonho:q0.sonho||"", teve_mentor:q0.teve_mentor||"", decide_sozinho:q0.decide_sozinho||""
+    maior_trava:q0.maior_trava||"", sonho:q0.sonho||"", teve_mentor:q0.teve_mentor||"", decide_sozinho:q0.decide_sozinho||"",
+    contrato_clausulas:conv.contrato_clausulas||""
   });
   const set=(k,v)=>setF(s=>({...s,[k]:v}));
   const saveConv=async(patch)=>{ const {error}=await sb.from("conversations").update(patch).eq("id",conv.id); if(error)onToast("Erro: "+error.message); else onSaved&&onSaved({conv:patch}); };
@@ -806,6 +807,7 @@ function LeadFicha({conv,onToast,onSaved}){
   const saveVal=()=>saveConv({deal_value:f.deal_value===""?null:Number(f.deal_value)});
   const saveNext=()=>saveConv({next_action:f.next_action||null,next_action_at:f.next_action_at||null});
   const saveNotes=()=>saveConv({notes:f.notes||null});
+  const saveClausulas=()=>saveConv({contrato_clausulas:f.contrato_clausulas||null});
   const saveTags=async()=>{ if(!conv.contact_id)return; const arr=f.tags.split(",").map(s=>s.trim()).filter(Boolean);
     const {error}=await sb.from("contacts").update({tags:arr}).eq("id",conv.contact_id); if(error)onToast("Erro: "+error.message); else onSaved&&onSaved({contact:{tags:arr}}); };
   const fld=(label,el)=>h("div",{className:"field"},h("label",null,label),el);
@@ -842,7 +844,10 @@ function LeadFicha({conv,onToast,onSaved}){
     ),
     fld("Objeção",inp("objecao",saveQual,"principal objeção")),
     sub("ANOTAÇÕES"),
-    fld("Anotações internas",ta("notes",saveNotes,"Resumo da conversa..."))
+    fld("Anotações internas",ta("notes",saveNotes,"Resumo da conversa...")),
+    sub("CONTRATO"),
+    fld("Cláusulas personalizadas",ta("contrato_clausulas",saveClausulas,"Ex: acesso ao conteúdo gravado por 12 meses. Entra como 'Disposições Personalizadas' no contrato — deixe vazio se não houver.")),
+    h("div",{style:{fontSize:11,color:"var(--muted)",marginTop:4}},"Escreva aqui qualquer cláusula/combinado específico desta venda. Vai automático pro contrato.")
   );
 }
 
