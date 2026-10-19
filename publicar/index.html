@@ -914,7 +914,9 @@ function AgendarModal({conv,nome,onConfirm,onClose,onToast}){
     var fim=b.getUTCFullYear()+"-"+p(b.getUTCMonth()+1)+"-"+p(b.getUTCDate())+"T"+p(b.getUTCHours())+":"+p(b.getUTCMinutes())+":00-03:00";
     try{
       var CAL={thiago:"thiagocorporativo12@gmail.com",mateus:"mateus@digitalreino.com"};
-      var r=await fetch(AGENDA_WEBHOOK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conversation_id:conv.id,titulo:titulo,inicio:inicio,fim:fim,descricao:"",calendar_id:(CAL[closer]||null)})});
+      var _url = closer==="thiago" ? AGENDA_WEBHOOK_THIAGO : AGENDA_WEBHOOK;
+      var _body = closer==="thiago" ? {conversation_id:conv.id,titulo:titulo,inicio:inicio,fim:fim,descricao:""} : {conversation_id:conv.id,titulo:titulo,inicio:inicio,fim:fim,descricao:"",calendar_id:(CAL[closer]||null)};
+      var r=await fetch(_url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(_body)});
       var j=await r.json();
       if(!j||!j.ok||!j.event_id)throw new Error("resposta inválida do agendador");
       await onConfirm({inicio:inicio,meet:j.meet_link||"",event_id:j.event_id,origem:origem||null,closer:closer});
@@ -1323,6 +1325,7 @@ function TotalBoard({search,account,userId,onToast}){
   const [pipeSel,setPipeSel]=useState("tudo");
   const [closerSel,setCloserSel]=useState("");
   const [funBoardSel,setFunBoardSel]=useState("");
+  const [agendar,setAgendar]=useState(null);
   const loadAll=useCallback(async()=>{
     const s=await sb.from("kanban_stages").select("*").order("position"); setStages(s.data||[]);
     const cv=await sb.from("conversations").select("*, contacts(*), kanban_stages(name,color)").eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}); setConvs(cv.data||[]);
@@ -1338,6 +1341,7 @@ function TotalBoard({search,account,userId,onToast}){
 
   const move=async(it,stName,stId)=>{
     if(it.type==="conv"){ if(it.raw.stage_id===stId)return;
+      if(stName==="Agendado"){ setAgendar({conv:it.raw,to:stId}); return; }
       setConvs(cs=>cs.map(c=>c.id===it.raw.id?{...c,stage_id:stId,kanban_stages:{name:stName}}:c));
       const r=await sb.from("conversations").update({stage_id:stId}).eq("id",it.raw.id); if(r.error){onToast(r.error.message);loadAll();return;}
       sb.from("activities").insert([{conversation_id:it.raw.id,actor_id:userId,type:"stage_change",payload:{to:stId}}]);
@@ -1350,6 +1354,21 @@ function TotalBoard({search,account,userId,onToast}){
   const saveLead=async(f)=>{ const r=await sb.from("leads").update(f).eq("id",f.id); if(r.error)return onToast(r.error.message); setEditLead(null); loadAll(); };
   const delLead=async(id)=>{ if(!confirm("Excluir este card?"))return; const r=await sb.from("leads").delete().eq("id",id); if(r.error)return onToast(r.error.message); setEditLead(null); loadAll(); };
   const doMerge=async(keepId,dropId)=>{ setPendMerge(null); const r=await sb.rpc("merge_contacts",{keep_id:keepId,drop_id:dropId}); if(r.error)return onToast("Erro ao juntar: "+r.error.message); onToast("Contatos juntados ✓"); loadAll(); };
+  const agendarModal = agendar && h(AgendarModal,{conv:agendar.conv,nome:displayName((agendar.conv.contacts)||{}),onClose:()=>setAgendar(null),onToast:onToast,
+    onConfirm: async (res)=>{ const cid=agendar.conv.id, to=agendar.to;
+      const og=function(c){return res.origem||c.origem;};
+      const cl=function(c){return res.closer||c.closer;};
+      setConvs(cs=>cs.map(c=>c.id===cid?{...c,stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id,origem:og(c),closer:cl(c),kanban_stages:{...(c.kanban_stages||{}),name:"Agendado"}}:c));
+      setModalConv(m=>m&&m.id===cid?{...m,stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id,origem:og(m),closer:cl(m)}:m);
+      setAgendar(null);
+      const patch={stage_id:to,agenda_inicio:res.inicio,agenda_link:res.meet,agenda_event_id:res.event_id};
+      if(res.origem)patch.origem=res.origem;
+      if(res.closer)patch.closer=res.closer;
+      const {error}=await sb.from("conversations").update(patch).eq("id",cid);
+      if(error){ onToast((res.jaFeito?"Erro ao salvar: ":"Agendei no Google, mas erro ao salvar: ")+error.message); loadAll(); }
+      else { sb.from("activities").insert([{conversation_id:cid,actor_id:userId,type:"stage_change",payload:{to:to,agendado:res.inicio,ja_feito:!!res.jaFeito}}]); onToast(res.jaFeito?"Marcado como agendado ✓":"Agendado! Meet criado ✓"); }
+    }
+  });
 
   if(convs===null||leads===null)return h("div",{className:"board"},h("div",{className:"center"},h("div",{className:"spin"})));
 
@@ -1410,7 +1429,7 @@ function TotalBoard({search,account,userId,onToast}){
         cards.length===0&&h("div",{className:"empty",style:{padding:14}},"—")
       );
     })),
-    modal, leadModal, mergeModal
+    modal, leadModal, mergeModal, agendarModal
   );
 }
 
