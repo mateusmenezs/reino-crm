@@ -969,6 +969,7 @@ function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,
   const [nomeCli,setNomeCli]=useState(nome||"");
   const [wpp,setWpp]=useState(whatsapp||"");
   const [grupoLink,setGrupoLink]=useState("");
+  const [jaCliente,setJaCliente]=useState(false);
   const [funil,setFunil]=useState(funil0||"");
   const [garantia,setGarantia]=useState(garantia0===true?"com":garantia0===false?"sem":"");
   const [modo,setModo]=useState("igual");
@@ -990,7 +991,7 @@ function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,
     if(modo==="custom"){
       if(planoLinhas.length===0)return onToast("Adicione ao menos 1 pagamento (valor + data).");
       setBusy(true);
-      await onConfirm({nome:nomeCli.trim(),whatsapp:wpp.trim(),grupoLink:grupoLink.trim(),funil:funil.trim(),produto:produto,closer:closer,valor:totalPlano,meio:meio,entrada:null,parcelas:null,primeira:null,plano:planoLinhas,resumo:meio+" · "+planoLinhas.length+" pagamento(s) personalizados",calls:calls?parseInt(calls,10):null,tempo:tempo.trim()||null,garantia:(garantia==="com")});
+      await onConfirm({nome:nomeCli.trim(),whatsapp:wpp.trim(),grupoLink:grupoLink.trim(),jaCliente:jaCliente,funil:funil.trim(),produto:produto,closer:closer,valor:totalPlano,meio:meio,entrada:null,parcelas:null,primeira:null,plano:planoLinhas,resumo:meio+" · "+planoLinhas.length+" pagamento(s) personalizados",calls:calls?parseInt(calls,10):null,tempo:tempo.trim()||null,garantia:(garantia==="com")});
       return;
     }
     if(!total||total<=0)return onToast("Informe o valor da venda.");
@@ -999,7 +1000,7 @@ function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,
     setBusy(true);
     var partes=[]; if(ent>0)partes.push("entrada R$ "+ent.toFixed(2)); if(base>0)partes.push(n+"x de R$ "+each.toFixed(2));
     var resumo=meio+(partes.length?" · "+partes.join(" + "):" · à vista");
-    await onConfirm({nome:nomeCli.trim(),whatsapp:wpp.trim(),grupoLink:grupoLink.trim(),funil:funil.trim(),produto:produto,closer:closer,valor:total,meio:meio,entrada:ent>0?ent:null,parcelas:n,primeira:primeira,plano:null,resumo:resumo,entradaPaga:(ent>0?entradaPaga:false),parcelasPagas:(parseInt(parcelasPagas,10)||0),calls:calls?parseInt(calls,10):null,tempo:tempo.trim()||null,garantia:(garantia==="com")});
+    await onConfirm({nome:nomeCli.trim(),whatsapp:wpp.trim(),grupoLink:grupoLink.trim(),jaCliente:jaCliente,funil:funil.trim(),produto:produto,closer:closer,valor:total,meio:meio,entrada:ent>0?ent:null,parcelas:n,primeira:primeira,plano:null,resumo:resumo,entradaPaga:(ent>0?entradaPaga:false),parcelasPagas:(parseInt(parcelasPagas,10)||0),calls:calls?parseInt(calls,10):null,tempo:tempo.trim()||null,garantia:(garantia==="com")});
   };
   var lbl=function(t){ return h("div",{style:{fontSize:12,fontWeight:700,color:"var(--muted)",margin:"12px 0 5px"}},t); };
   var inp={width:"100%",padding:"11px 12px",border:"1px solid var(--line)",borderRadius:10,fontSize:14};
@@ -1015,6 +1016,9 @@ function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,
       h("input",{value:wpp,onChange:function(e){setWpp(e.target.value);},placeholder:"(11) 99999-9999",style:inp}),
       lbl("Link do grupo do cliente (opcional)"),
       h("input",{value:grupoLink,onChange:function(e){setGrupoLink(e.target.value);},placeholder:"https://chat.whatsapp.com/...",style:inp}),
+      h("label",{style:{display:"flex",gap:9,alignItems:"flex-start",cursor:"pointer",margin:"12px 0 2px",padding:"10px 12px",borderRadius:10,border:"1px solid "+(jaCliente?"var(--gold)":"var(--line)"),background:jaCliente?"var(--gold-soft)":"var(--card)"}},
+        h("input",{type:"checkbox",checked:jaCliente,onChange:function(e){setJaCliente(e.target.checked);},style:{marginTop:2,width:16,height:16,flex:"0 0 auto"}}),
+        h("span",{style:{fontSize:12.5,lineHeight:1.4}},h("b",null,"Já é cliente / já pagou — não disparar onboarding"),h("br"),h("span",{style:{color:"var(--muted)"}},"Registra a venda (ERP, relatórios, comissão) SEM mandar boas-vindas, contrato nem follow-up pro cliente. Use pra clientes antigos/tráfego."))),
       lbl("Produto"),
       h("select",{value:produto,onChange:function(e){setProduto(e.target.value);},style:Object.assign({background:"var(--card)"},inp)},
         [["","Selecione..."],["Aceleração","Aceleração"],["Ativação","Ativação"],["Assessoria","Assessoria"],["Consultoria Reino","Consultoria Reino"]].map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);})),
@@ -1193,7 +1197,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
       const stageTrig=viaVenda||to; // etapa que dispara os triggers de venda (Venda)
       const contatoPatch={full_name:res.nome, phone:onlyDigits(res.whatsapp)||null};
       var recebidoVenda=0; if(res.plano&&res.plano.length){ res.plano.forEach(function(l){ if(l.pago) recebidoVenda+=Number(l.valor)||0; }); } else { var _vt=Number(res.valor)||0,_ve=Number(res.entrada)||0,_np=Math.max(1,Number(res.parcelas)||1),_ea=(_vt-_ve)/_np; if(res.entradaPaga) recebidoVenda+=_ve; recebidoVenda+=(Number(res.parcelasPagas)||0)*_ea; }
-      const patch={stage_id:stageTrig,funil:res.funil||null,grupo_link:res.grupoLink||null,produto:res.produto,closer:res.closer||null,recebido_venda:recebidoVenda,deal_value:res.valor,forma_pagamento:res.resumo,pgto_meio:res.meio,pgto_entrada:res.entrada,pgto_parcelas:res.parcelas,pgto_primeira:res.primeira,pgto_plano:res.plano,pgto_entrada_paga:res.entradaPaga||false,pgto_parcelas_pagas:res.parcelasPagas||0,qtd_calls:res.calls,tempo_contrato:res.tempo,garantia:res.garantia,venda_em:new Date().toISOString()};
+      const patch={stage_id:stageTrig,funil:res.funil||null,grupo_link:res.grupoLink||null,produto:res.produto,closer:res.closer||null,recebido_venda:recebidoVenda,deal_value:res.valor,forma_pagamento:res.resumo,pgto_meio:res.meio,pgto_entrada:res.entrada,pgto_parcelas:res.parcelas,pgto_primeira:res.primeira,pgto_plano:res.plano,pgto_entrada_paga:res.entradaPaga||false,pgto_parcelas_pagas:res.parcelasPagas||0,qtd_calls:res.calls,tempo_contrato:res.tempo,garantia:res.garantia,pular_onboarding:!!res.jaCliente,venda_em:new Date().toISOString()};
       const uiPatch={...patch,stage_id:to}; // na tela o card já cai na etapa de destino (Alunos quando viaVenda)
       setConvs(cs=>cs.map(c=>c.id===cid?{...c,...uiPatch,contacts:{...(c.contacts||{}),...contatoPatch}}:c));
       setModalConv(m=>m&&m.id===cid?{...m,...uiPatch,contacts:{...(m.contacts||{}),...contatoPatch}}:m);
@@ -1377,7 +1381,7 @@ function TotalBoard({search,account,userId,onToast}){
       const stageTrig=viaVenda||to;
       const contatoPatch={full_name:res.nome, phone:onlyDigits(res.whatsapp)||null};
       var recebidoVenda=0; if(res.plano&&res.plano.length){ res.plano.forEach(function(l){ if(l.pago) recebidoVenda+=Number(l.valor)||0; }); } else { var _vt=Number(res.valor)||0,_ve=Number(res.entrada)||0,_np=Math.max(1,Number(res.parcelas)||1),_ea=(_vt-_ve)/_np; if(res.entradaPaga) recebidoVenda+=_ve; recebidoVenda+=(Number(res.parcelasPagas)||0)*_ea; }
-      const patch={stage_id:stageTrig,funil:res.funil||null,grupo_link:res.grupoLink||null,produto:res.produto,closer:res.closer||null,recebido_venda:recebidoVenda,deal_value:res.valor,forma_pagamento:res.resumo,pgto_meio:res.meio,pgto_entrada:res.entrada,pgto_parcelas:res.parcelas,pgto_primeira:res.primeira,pgto_plano:res.plano,pgto_entrada_paga:res.entradaPaga||false,pgto_parcelas_pagas:res.parcelasPagas||0,qtd_calls:res.calls,tempo_contrato:res.tempo,garantia:res.garantia,venda_em:new Date().toISOString()};
+      const patch={stage_id:stageTrig,funil:res.funil||null,grupo_link:res.grupoLink||null,produto:res.produto,closer:res.closer||null,recebido_venda:recebidoVenda,deal_value:res.valor,forma_pagamento:res.resumo,pgto_meio:res.meio,pgto_entrada:res.entrada,pgto_parcelas:res.parcelas,pgto_primeira:res.primeira,pgto_plano:res.plano,pgto_entrada_paga:res.entradaPaga||false,pgto_parcelas_pagas:res.parcelasPagas||0,qtd_calls:res.calls,tempo_contrato:res.tempo,garantia:res.garantia,pular_onboarding:!!res.jaCliente,venda_em:new Date().toISOString()};
       const stName=(stages.find(s=>s.id===to)||{}).name;
       const uiPatch={...patch,stage_id:to,kanban_stages:{name:stName}};
       setConvs(cs=>cs.map(c=>c.id===cid?{...c,...uiPatch,contacts:{...(c.contacts||{}),...contatoPatch}}:c));
