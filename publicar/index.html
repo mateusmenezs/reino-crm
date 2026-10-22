@@ -959,7 +959,7 @@ function AgendarModal({conv,nome,onConfirm,onClose,onToast}){
     )
   );
 }
-function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,onClose,onToast}){
+function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,onClose,onToast,onSkip}){
   function money(s){ var v=parseFloat(String(s||"").replace(/[^0-9,.]/g,"").replace(/\./g,"").replace(",",".")); return isNaN(v)?0:v; }
   function hoje(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
   function addMeses(ds,k){ var p=String(ds||"").split("-"); if(p.length<3)return ds; var d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2])); d.setMonth(d.getMonth()+k); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
@@ -1021,7 +1021,7 @@ function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,
         h("span",{style:{fontSize:12.5,lineHeight:1.4}},h("b",null,"Cliente ANTIGO — não mandar contrato/onboarding"),h("br"),h("span",{style:{color:"var(--muted)"}},"Marque SÓ pra quem já assinou contrato antes (ex: tráfego, renovação, migração). ⚠️ Venda NOVA, mesmo já paga à vista, NÃO marque — ela PRECISA do contrato. Na dúvida, deixe desmarcado."))),
       lbl("Produto"),
       h("select",{value:produto,onChange:function(e){setProduto(e.target.value);},style:Object.assign({background:"var(--card)"},inp)},
-        [["","Selecione..."],["Aceleração","Aceleração"],["Ativação","Ativação"],["Assessoria","Assessoria"],["Consultoria Reino","Consultoria Reino"]].map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);})),
+        [["","Selecione..."],["Start","Start"],["Aceleração","Aceleração"],["Ativação","Ativação"],["Assessoria","Assessoria"],["Consultoria Reino","Consultoria Reino"]].map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);})),
       lbl("Closer / vendedor"),
       h("select",{value:closer,onChange:function(e){setCloser(e.target.value);},style:Object.assign({background:"var(--card)"},inp)},
         [["","Selecione..."],["Mateus","Mateus"],["Thiago","Thiago"],["Cris","Cris"]].map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);})),
@@ -1072,24 +1072,30 @@ function VendaModal({nome,whatsapp,funil0,garantia0,channel,contactId,onConfirm,
         h("div",{style:col()}, lbl("Tempo de contrato"), h("input",{value:tempo,onChange:function(e){setTempo(e.target.value);},placeholder:"ex: 12 meses",style:inp}))
       ),
       h("div",{style:{fontSize:11.5,color:"var(--muted)",marginTop:10}},"Gera as contas a receber no financeiro com o valor e a data de cada pagamento."),
+      onSkip&&h("div",{style:{marginTop:12,padding:"10px 12px",borderRadius:10,border:"1px dashed var(--line)",fontSize:12,color:"var(--muted)",lineHeight:1.4}},
+        h("b",{style:{color:"var(--ink)"}},"Só quer passar pra Alunos?"),h("br"),"Use \"Mover sem registrar venda\": o card vai pra Alunos sem gerar financeiro, contrato nem onboarding. Dá pra registrar a venda depois arrastando pra Venda."),
       h("div",{className:"modal-acts"},
         h("button",{className:"btn ghost",onClick:onClose,disabled:busy},"Cancelar"),
+        onSkip&&h("button",{className:"btn ghost",onClick:function(){setBusy(true);onSkip();},disabled:busy},"Mover sem registrar venda"),
         h("button",{className:"btn gold",onClick:confirmar,disabled:busy}, busy?"Salvando…":"Registrar venda")
       )
     )
   );
 }
 const PIPELINES={
-  aquisicao:{label:"Aquisição",stages:["Novo Lead","FUP1","FUP2","FUP3","FUP4","Agendado","Reunião confirmada"]},
+  aquisicao:{label:"Aquisição",stages:["Novo Lead","FUP1","FUP2","FUP3","FUP4","Agendado","Reunião confirmada","Não comercial"]},
   vendas:{label:"Vendas",stages:["Reunião confirmada","Reunião feita","FUP4","Em negociação","FUP5","FUP6","Assinatura Pendente","Venda","Perdido"]}
 };
 function closerLabel(v){ for(var i=0;i<CLOSERS.length;i++){ if(CLOSERS[i][0]===v)return CLOSERS[i][1]; } return v||""; }
 const ORIGENS=[["social_selling","📸 Social Selling"],["indicacao","🤝 Indicação"],["isca","🧲 Isca"],["evento_presencial","🎟️ Evento presencial"],["evento_online","💻 Evento online"],["anuncio","📣 Anúncio"],["whatsapp_direto","💬 WhatsApp direto"],["outros","Outros"]];
 function origemLabel(v){ for(var i=0;i<ORIGENS.length;i++){ if(ORIGENS[i][0]===v)return ORIGENS[i][1]; } return v?v:"—"; }
 function origemBucket(conv){ var o=conv&&conv.origem; if(!o)o=(conv&&conv.channel==="instagram")?"social_selling":"outros"; return o==="social_selling"?"social":(o==="evento_presencial"||o==="evento")?"presencial":o==="evento_online"?"online":"outros"; }
+// Etapas ocultas no banco que mesmo assim viram coluna no board (ficam no fim do "Tudo").
+// "Não comercial" guarda contatos que não são comerciais; segue fora da caixa de entrada.
+var STAGES_SEMPRE_VISIVEIS={"Não comercial":1};
 function stagesForPipe(stages,pk){
-  var vis=(stages||[]).filter(function(s){return !s.oculto;});
-  if(!pk||pk==="tudo")return vis;
+  var vis=(stages||[]).filter(function(s){return !s.oculto||STAGES_SEMPRE_VISIVEIS[s.name];});
+  if(!pk||pk==="tudo")return vis.filter(function(s){return !STAGES_SEMPRE_VISIVEIS[s.name];}).concat(vis.filter(function(s){return STAGES_SEMPRE_VISIVEIS[s.name];}));
   var conf=PIPELINES[pk]; if(!conf)return vis;
   var byName={}; vis.forEach(function(s){byName[s.name]=s;});
   return conf.stages.map(function(n){return byName[n];}).filter(Boolean);
@@ -1115,13 +1121,13 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
     .on("postgres_changes",{event:"*",schema:"public",table:"conversations"},()=>loadConvs()).subscribe();
     return ()=>sb.removeChannel(ch); },[channel,loadConvs]);
 
-  const moveStage=async(conv,to)=>{ if(!to||conv.stage_id===to)return;
+  const moveStage=async(conv,to,force)=>{ if(!to||conv.stage_id===to)return;
     const agSt=stages.find(s=>s.name==="Agendado");
     if(agSt&&to===agSt.id){ setAgendar({conv:conv,to:to}); return; }
     const vdSt=stages.find(s=>s.name==="Venda");
     if(vdSt&&to===vdSt.id){ setVenda({conv:conv,to:to}); return; }
     const alSt=stages.find(s=>s.name==="Alunos");
-    if(alSt&&to===alSt.id&&vdSt&&!(conv.venda_em||Number(conv.deal_value)>0)){ setVenda({conv:conv,to:to,viaVenda:vdSt.id}); return; }
+    if(!force&&alSt&&to===alSt.id&&vdSt&&!(conv.venda_em||Number(conv.deal_value)>0)){ setVenda({conv:conv,to:to,viaVenda:vdSt.id}); return; }
     setConvs(cs=>cs.map(c=>c.id===conv.id?{...c,stage_id:to}:c));
     setModalConv(m=>m&&m.id===conv.id?{...m,stage_id:to}:m);
     setSel(s=>s&&s.id===conv.id?{...s,stage_id:to}:s);
@@ -1193,6 +1199,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
   });
 
   const vendaModal = venda && h(VendaModal,{nome:(ctf(venda.conv).full_name||ctf(venda.conv).username||""), whatsapp:(ctf(venda.conv).phone||""), channel:channel, contactId:venda.conv.contact_id, funil0:(venda.conv.funil||(channel==="instagram"?"Social selling":channel==="camilla"?"Low ticket":"")), garantia0:venda.conv.garantia, onClose:()=>setVenda(null),onToast:onToast,
+    onSkip: venda.viaVenda ? function(){ var v=venda; setVenda(null); moveStage(v.conv,v.to,true); onToast("Movido pra Alunos (sem venda registrada)"); } : null,
     onConfirm: async (res)=>{ const cid=venda.conv.id, to=venda.to, viaVenda=venda.viaVenda, contactId=venda.conv.contact_id;
       const stageTrig=viaVenda||to; // etapa que dispara os triggers de venda (Venda)
       const contatoPatch={full_name:res.nome, phone:onlyDigits(res.whatsapp)||null};
@@ -1344,11 +1351,11 @@ function TotalBoard({search,account,userId,onToast}){
   (leads||[]).forEach(l=>items.push({type:"lead",id:"l"+l.id,raw:l,name:l.nome||"(sem nome)",sub:l.instagram?("@"+igHandle(l.instagram)):(l.whatsapp||""),pic:null,stageName:l.status,channel:"evento"}));
   const match=it=>!t||[it.name,it.sub].some(v=>(v||"").toLowerCase().includes(t));
 
-  const move=async(it,stName,stId)=>{
+  const move=async(it,stName,stId,force)=>{
     if(it.type==="conv"){ if(it.raw.stage_id===stId)return;
       if(stName==="Agendado"){ setAgendar({conv:it.raw,to:stId}); return; }
       if(stName==="Venda"){ setVenda({conv:it.raw,to:stId}); return; }
-      if(stName==="Alunos"&&!(it.raw.venda_em||Number(it.raw.deal_value)>0)){ const vdSt=stages.find(s=>s.name==="Venda"); if(vdSt){ setVenda({conv:it.raw,to:stId,viaVenda:vdSt.id}); return; } }
+      if(!force&&stName==="Alunos"&&!(it.raw.venda_em||Number(it.raw.deal_value)>0)){ const vdSt=stages.find(s=>s.name==="Venda"); if(vdSt){ setVenda({conv:it.raw,to:stId,viaVenda:vdSt.id}); return; } }
       setConvs(cs=>cs.map(c=>c.id===it.raw.id?{...c,stage_id:stId,kanban_stages:{name:stName}}:c));
       const r=await sb.from("conversations").update({stage_id:stId}).eq("id",it.raw.id); if(r.error){onToast(r.error.message);loadAll();return;}
       sb.from("activities").insert([{conversation_id:it.raw.id,actor_id:userId,type:"stage_change",payload:{to:stId}}]);
@@ -1377,6 +1384,7 @@ function TotalBoard({search,account,userId,onToast}){
     }
   });
   const vendaModal = venda && h(VendaModal,{nome:((venda.conv.contacts||{}).full_name||(venda.conv.contacts||{}).username||""), whatsapp:((venda.conv.contacts||{}).phone||""), channel:venda.conv.channel, contactId:venda.conv.contact_id, funil0:(venda.conv.funil||(venda.conv.channel==="instagram"?"Social selling":venda.conv.channel==="camilla"?"Low ticket":"")), garantia0:venda.conv.garantia, onClose:()=>setVenda(null),onToast:onToast,
+    onSkip: venda.viaVenda ? function(){ var v=venda; setVenda(null); move({type:"conv",raw:v.conv},"Alunos",v.to,true); onToast("Movido pra Alunos (sem venda registrada)"); } : null,
     onConfirm: async (res)=>{ const cid=venda.conv.id, to=venda.to, viaVenda=venda.viaVenda, contactId=venda.conv.contact_id;
       const stageTrig=viaVenda||to;
       const contatoPatch={full_name:res.nome, phone:onlyDigits(res.whatsapp)||null};
@@ -2336,25 +2344,26 @@ function OnboardingView({onToast}){
   const [rows,setRows]=useState(null);
   const [sel,setSel]=useState(null);
   const load=useCallback(async function(){
-    var r=await sb.from("conversations").select("id,produto,venda_em,form_contrato_enviado_em,form_contrato_ok_em,contrato_enviado_em,contrato_assinado_em,briefing_enviado_em,briefing_ok_em,briefing_respostas,agendamento_enviado_em,impl_agendado_em,briefing_fup_nivel,agendamento_fup_nivel,impl_plano,impl_plano_em,agenda_inicio,agenda_link,contacts(full_name,phone)").eq("produto","Aceleração").order("venda_em",{ascending:false,nullsFirst:false});
+    var r=await sb.from("conversations").select("id,produto,venda_em,form_contrato_enviado_em,form_contrato_ok_em,contrato_enviado_em,contrato_assinado_em,briefing_enviado_em,briefing_ok_em,briefing_respostas,agendamento_enviado_em,impl_agendado_em,briefing_fup_nivel,agendamento_fup_nivel,impl_plano,impl_plano_em,agenda_inicio,agenda_link,contacts(full_name,phone)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false});
     setRows(r.data||[]);
   },[]);
   useEffect(function(){load();},[load]);
-  var FASES=["Venda","Form de contrato","Contrato","Briefing","Agendamento","Agendado"];
-  var CORES={"Venda":"#22C55E","Form de contrato":"#3B101D","Contrato":"#F59E0B","Briefing":"#3B101D","Agendamento":"#FF4D00","Agendado":"#059669"};
+  var FASES=["Venda","Form de contrato","Contrato enviado","Contrato assinado","Briefing enviado","Briefing feito","Agendado"];
+  var CORES={"Venda":"#22C55E","Form de contrato":"#3B101D","Contrato enviado":"#F59E0B","Contrato assinado":"#059669","Briefing enviado":"#3B101D","Briefing feito":"#0EA5E9","Agendado":"#FF4D00"};
   function fase(c){
     if(c.impl_agendado_em)return "Agendado";
-    if(c.agendamento_enviado_em||c.briefing_ok_em)return "Agendamento";
-    if(c.briefing_enviado_em||c.contrato_assinado_em)return "Briefing";
-    if(c.contrato_enviado_em||c.form_contrato_ok_em)return "Contrato";
+    if(c.briefing_ok_em)return "Briefing feito";
+    if(c.briefing_enviado_em)return "Briefing enviado";
+    if(c.contrato_assinado_em)return "Contrato assinado";
+    if(c.contrato_enviado_em||c.form_contrato_ok_em)return "Contrato enviado";
     if(c.form_contrato_enviado_em)return "Form de contrato";
     return "Venda";
   }
-  function faseTs(c,f){ return ({"Venda":c.venda_em,"Form de contrato":c.form_contrato_enviado_em,"Contrato":c.contrato_enviado_em,"Briefing":c.briefing_enviado_em,"Agendamento":c.agendamento_enviado_em,"Agendado":c.impl_agendado_em})[f]; }
+  function faseTs(c,f){ return ({"Venda":c.venda_em,"Form de contrato":c.form_contrato_enviado_em,"Contrato enviado":c.contrato_enviado_em,"Contrato assinado":c.contrato_assinado_em,"Briefing enviado":c.briefing_enviado_em,"Briefing feito":c.briefing_ok_em,"Agendado":c.impl_agendado_em})[f]; }
   function diasDe(iso){ if(!iso)return null; return Math.floor((Date.now()-new Date(iso).getTime())/86400000); }
   if(rows===null)return h("div",{className:"center"},h("div",{className:"spin"}));
   return h(Fr,null,
-    h("div",{style:{padding:"4px 20px 0",fontSize:12.5,color:"var(--muted)"}},"Onboarding da Aceleração — ",rows.length," cliente(s). Clique num card pra ver passos, briefing e plano."),
+    h("div",{style:{padding:"4px 20px 0",fontSize:12.5,color:"var(--muted)"}},"Jornada dos clientes (pós-venda) — ",rows.length," cliente(s), todos os produtos. Atualiza sozinho conforme a automação avança. Clique num card pra ver passos, briefing e plano."),
     h(BoardScroller,null,
       FASES.map(function(f){
         var cards=rows.filter(function(c){return fase(c)===f;});
@@ -2364,7 +2373,7 @@ function OnboardingView({onToast}){
             cards.length===0&&h("div",{style:{fontSize:11.5,color:"var(--muted)",padding:"6px 2px"}},"—"),
             cards.map(function(c){
               var d=diasDe(faseTs(c,f));
-              var fup=(f==="Briefing"&&c.briefing_fup_nivel)?("briefing · FUP "+c.briefing_fup_nivel+"/3"):(f==="Agendamento"&&c.agendamento_fup_nivel)?("agendamento · FUP "+c.agendamento_fup_nivel+"/3"):null;
+              var fup=(f==="Briefing enviado"&&c.briefing_fup_nivel)?("briefing · FUP "+c.briefing_fup_nivel+"/3"):(f==="Briefing feito"&&c.agendamento_fup_nivel)?("agendamento · FUP "+c.agendamento_fup_nivel+"/3"):null;
               return h("div",{key:c.id,className:"card",style:{cursor:"pointer"},onClick:function(){setSel(c);}},
                 h("div",{style:{fontWeight:700,fontSize:13}},(c.contacts&&c.contacts.full_name)||"(sem nome)"),
                 h("div",{style:{fontSize:11,color:"var(--muted)",marginTop:3}},(d!=null?("parado há "+d+"d"):"agora"),c.impl_plano?"  ·  ✨ plano":""),
@@ -2388,7 +2397,7 @@ function OnbModal({c,onClose,onToast,reload}){
   return h("div",{className:"overlay",onClick:onClose},
     h("div",{className:"modal",onClick:function(e){e.stopPropagation();},style:{maxWidth:560}},
       h("div",{style:{fontWeight:800,fontSize:16}},ct.full_name||"(sem nome)"),
-      h("div",{style:{fontSize:12,color:"var(--muted)",marginBottom:12}},(ct.phone||"")+" · Aceleração"),
+      h("div",{style:{fontSize:12,color:"var(--muted)",marginBottom:12}},(ct.phone||"")+" · "+(c.produto||"—")),
       h("div",{style:{display:"flex",gap:6,marginBottom:12}},
         [["passos","Passos"],["briefing","Briefing"],["plano","✨ Plano"]].map(function(t){return h("button",{key:t[0],className:"btn "+(tab===t[0]?"gold":"ghost")+" sm",onClick:function(){setTab(t[0]);}},t[1]);})),
       tab==="passos"&&h("div",null,
@@ -2686,7 +2695,7 @@ function Shell({session}){
     ["Hoje",[["painel","Painel"],["rotinacris","Rotina do dia"],["rotina","Minhas tarefas"]]],
     ["Comercial",[["total","Pipeline"],["lowticket","Low ticket"],["agenda","Agenda"],["contatos","Contatos"],["contratos","Contratos presos"],["playbooks","Playbooks ↗"]]],
     ["Prospecção",[["ig","Instagram"],["whatsapp_cris","WhatsApp"]]],
-    ["Entrega",[["onboarding","Onboarding"],["mentorados","Mentorados"],["trafego","Clientes"],["cs","CS / Pagamentos"]]],
+    ["Entrega",[["onboarding","Jornada"],["mentorados","Mentorados"],["trafego","Clientes"],["cs","CS / Pagamentos"]]],
     ["Gestão",[["relatorio","Desempenho"],["tarefas","Tarefas"],["time","Time"],["pesquisa","Pesquisa"]]]
   ];
   var ADMIN_ONLY={time:1,relatorio:1};
