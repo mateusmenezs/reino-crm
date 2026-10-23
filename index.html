@@ -2458,6 +2458,8 @@ function OnbModal({x,onClose,onToast,reload}){
   var m=x._m||{}; var q=c.qualificacao||{};
   function now(){return new Date().toISOString();}
   var dig=function(s){return String(s||"").replace(/[^0-9]/g,"");};
+  var AGCALL="https://scarycrocodile-n8n.cloudfy.live/webhook/agendar-call";
+  function copia(u){ try{ navigator.clipboard.writeText(u); onToast&&onToast("Link copiado ✓"); }catch(e){ onToast&&onToast(u); } }
   async function convMark(patch,msg){ setBusy(true); try{ await sb.from("conversations").update(patch).eq("id",c.id); onToast&&onToast(msg); await reload(); onClose(); }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); } }
   async function callMark(id,body,msg){ setBusy(true); try{ await sb.from("entrega_calls").update(body).eq("id",id); onToast&&onToast(msg); await reload(); onClose(); }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); } }
   async function passoAdd(){ var t=novoPasso.trim(); if(!t)return; setBusy(true); try{ await sb.from("plano_acao_passos").insert({conversation_id:c.id,texto:t,prazo:novoPrazo||null,criado_por:"time",ordem:((x.passos||[]).length+1)}); onToast&&onToast("Passo adicionado ✓"); await reload(); onClose(); }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); } }
@@ -2506,6 +2508,7 @@ function OnbModal({x,onClose,onToast,reload}){
               )
             ),
             !done&&h("div",{style:{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}},
+              temAg&&h("button",{className:"btn ghost sm",onClick:function(){copia(AGCALL+"?c="+c.id+"&ordem="+cl.ordem);}},"🔗 link de agendamento"),
               !ag&&h("button",{className:"btn ghost sm",disabled:busy,onClick:function(){callMark(cl.id,{status:"agendada",agendado_em:now()},"Marcada como agendada ✓");}},"Marcar agendada"),
               h("button",{className:"btn gold sm",disabled:busy,onClick:function(){callMark(cl.id,{status:"feita",feita_em:now()},cl.titulo+" feita ✓");}},"Marcar feita")
             )
