@@ -1112,7 +1112,8 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
 
   const loadStages=useCallback(async()=>{ const {data}=await sb.from("kanban_stages").select("*").order("position"); setStages(data||[]); },[]);
   const loadConvs=useCallback(async()=>{
-    const {data,error}=await sb.from("conversations").select("*, contacts(*), kanban_stages(name,color)").eq("channel",channel).eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false});
+    /* em lotes de 1000 (o Supabase corta em 1000 por consulta) */
+    let data=null,error=null; try{ data=await sbAll("conversations","*, contacts(*), kanban_stages(name,color)",function(q){return q.eq("channel",channel).eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}).order("id");}); }catch(e){ error=e; }
     if(error){onToast("Erro: "+error.message);setConvs([]);return;} setConvs(data||[]);
   },[channel]);
   useEffect(()=>{loadStages();},[loadStages]);
@@ -1340,7 +1341,7 @@ function TotalBoard({search,account,userId,onToast}){
   const [venda,setVenda]=useState(null);
   const loadAll=useCallback(async()=>{
     const s=await sb.from("kanban_stages").select("*").order("position"); setStages(s.data||[]);
-    const cv=await sb.from("conversations").select("*, contacts(*), kanban_stages(name,color)").eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}); setConvs(cv.data||[]);
+    const cvAll=await sbAll("conversations","*, contacts(*), kanban_stages(name,color)",function(q){return q.eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}).order("id");}); setConvs(cvAll||[]);
     const ld=await sb.from("leads").select("*").order("criado_em",{ascending:false,nullsFirst:false}); setLeads(ld.data||[]);
   },[]);
   useEffect(()=>{loadAll();},[loadAll]);
