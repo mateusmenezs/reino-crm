@@ -1469,8 +1469,53 @@ function TotalBoard({search,account,userId,onToast}){
 }
 
 /* ===================== CONTATOS (base unificada + merge) ===================== */
+function NovoContatoModal({onClose,onCreated,onToast}){
+  const [f,setF]=useState({nome:"",wpp:"",insta:"",email:"",funil:"social_selling"});
+  const [busy,setBusy]=useState(false);
+  var up=function(k,v){ setF(function(x){var y=Object.assign({},x);y[k]=v;return y;}); };
+  var inp={width:"100%",padding:"10px 12px",border:"1px solid var(--line)",borderRadius:10,fontSize:14,background:"var(--card)",color:"var(--ink)",marginTop:4};
+  var lab={fontSize:12,fontWeight:700,color:"var(--muted)"};
+  async function salvar(){
+    if(!f.nome.trim())return onToast&&onToast("Informe o nome do contato.");
+    setBusy(true);
+    try{
+      var st=await sb.from("kanban_stages").select("id").eq("name","Novo Lead").limit(1);
+      var stageId=(st&&st.data&&st.data[0])?st.data[0].id:"3441a20e-d74c-4315-b112-c96189c962b9";
+      var uname=f.insta.trim().replace(/^@+/,"");
+      var fone=onlyDigits(f.wpp);
+      var cRes=await sb.from("contacts").insert([{full_name:f.nome.trim(),phone:fone||null,username:uname||null,email:f.email.trim()||null,channel:"manual",tags:["criado-manual"]}]).select();
+      if(cRes.error)throw cRes.error;
+      var cid=cRes.data&&cRes.data[0]&&cRes.data[0].id;
+      var nowv=new Date().toISOString();
+      var vRes=await sb.from("conversations").insert([{contact_id:cid,stage_id:stageId,channel:"manual",origem:f.funil||null,last_message_at:nowv,last_inbound_at:nowv,is_archived:false,notes:"Criado na mão pela aba Contatos"}]);
+      if(vRes.error)throw vRes.error;
+      onToast&&onToast("Contato criado — está no Pipeline em Novo Lead ✓");
+      onCreated&&onCreated();
+    }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); }
+  }
+  return h("div",{className:"overlay",onClick:onClose},
+    h("div",{className:"modal",style:{maxWidth:460},onClick:function(e){e.stopPropagation();}},
+      h("h3",{style:{marginTop:0}},"Novo contato"),
+      h("div",{style:{fontSize:12.5,color:"var(--muted)",marginBottom:12}},"Pra quando o lead não entrou sozinho. Ele cai no Pipeline em ",h("b",null,"Novo Lead")," e já pode ser agendado."),
+      h("label",{style:{display:"block"}},h("span",{style:lab},"Nome *"),
+        h("input",{autoFocus:true,value:f.nome,onChange:function(e){up("nome",e.target.value);},placeholder:"Ex.: Janes Mara Rocha",style:inp})),
+      h("div",{style:{display:"flex",gap:10,marginTop:10}},
+        h("label",{style:{flex:1}},h("span",{style:lab},"WhatsApp"),
+          h("input",{value:f.wpp,onChange:function(e){up("wpp",e.target.value);},placeholder:"(31) 9...",style:inp})),
+        h("label",{style:{flex:1}},h("span",{style:lab},"@ Instagram"),
+          h("input",{value:f.insta,onChange:function(e){up("insta",e.target.value);},placeholder:"profabelmacedo",style:inp}))),
+      h("label",{style:{display:"block",marginTop:10}},h("span",{style:lab},"E-mail"),
+        h("input",{value:f.email,onChange:function(e){up("email",e.target.value);},placeholder:"opcional",style:inp})),
+      h("label",{style:{display:"block",marginTop:10}},h("span",{style:lab},"Funil / origem"),
+        h("select",{value:f.funil,onChange:function(e){up("funil",e.target.value);},style:inp},
+          ORIGENS.map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);}))),
+      h("div",{className:"modal-acts",style:{marginTop:16,display:"flex",gap:8,justifyContent:"flex-end"}},
+        h("button",{className:"btn ghost",disabled:busy,onClick:onClose},"Cancelar"),
+        h("button",{className:"btn gold",disabled:busy,onClick:salvar},busy?"Criando...":"Criar contato")))
+  );
+}
 function ContatosView({search,onToast}){
-  const [rows,setRows]=useState(null),[sel,setSel]=useState(null),[pend,setPend]=useState(null),[fuzzy,setFuzzy]=useState([]);
+  const [rows,setRows]=useState(null),[sel,setSel]=useState(null),[pend,setPend]=useState(null),[fuzzy,setFuzzy]=useState([]),[novo,setNovo]=useState(false);
   const load=useCallback(async()=>{
     const {data,error}=await sb.from("contacts").select("*, conversations(channel,last_message_at,deal_value)");
     if(error){onToast("Erro: "+error.message);setRows([]);return;} setRows(data||[]);
@@ -1507,7 +1552,10 @@ function ContatosView({search,onToast}){
     h("div",{style:{display:"flex",gap:4,alignItems:"center",flexShrink:0}}, chanBadges(c)),
     (c.tags&&c.tags.length)?h("div",{style:{fontSize:11,color:"var(--gold)",flexShrink:0,maxWidth:120,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}, c.tags.slice(0,2).join(", ")):null); };
   return h("div",{style:{maxWidth:920,margin:"0 auto",width:"100%",padding:"16px",overflowY:"auto"}},
-    h("h2",{style:{fontSize:20,marginBottom:10}},"Contatos ("+rows.length+")"),
+    h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}},
+      h("h2",{style:{fontSize:20,margin:0}},"Contatos ("+rows.length+")"),
+      h("button",{className:"btn gold sm",onClick:function(){setNovo(true);}},"+ Novo contato")),
+    novo && h(NovoContatoModal,{onToast:onToast,onClose:function(){setNovo(false);},onCreated:function(){setNovo(false);load();}}),
     dups.length>0 && h("div",{style:{background:"var(--gold-soft)",border:"1px solid var(--gold)",borderRadius:12,padding:"12px 14px",marginBottom:16}},
       h("div",{style:{fontWeight:700,fontSize:13,marginBottom:8}},"🔎 Possíveis duplicados ("+dups.length+")"),
       dups.slice(0,25).map(function(arr,i){var keep=bestKeep(arr),others=arr.filter(function(x){return x.id!==keep.id;});
