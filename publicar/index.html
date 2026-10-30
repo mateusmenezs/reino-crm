@@ -2895,6 +2895,7 @@ function AgendaView({onToast}){
   const [wStart,setWStart]=useState(mondayOf(today));
   const [evs,setEvs]=useState(null);
   const [filtro,setFiltro]=useState("ambos");
+  const [sel,setSel]=useState(null);
   const load=useCallback(async function(){
     setEvs(null);
     var ini=wStart+"T00:00:00-03:00", fim=ymdAdd(wStart,7)+"T00:00:00-03:00";
@@ -2935,16 +2936,33 @@ function AgendaView({onToast}){
             h("div",{style:{fontSize:12,fontWeight:800,color:isToday?"var(--accent)":"var(--ink)",marginBottom:8,textTransform:"capitalize",borderBottom:"1px solid var(--line)",paddingBottom:6}}, lbl, isToday?" • hoje":""),
             dayEvs.length===0? h("div",{style:{fontSize:11.5,color:"var(--muted)",padding:"6px 2px"}},"livre")
             : dayEvs.map(function(e){ var col=MCOL[e.closer]||"var(--muted)";
-                return h("div",{key:e.id,title:(e.closer||"")+": "+(e.titulo||""),style:{borderLeft:"3px solid "+col,background:"var(--bg)",borderRadius:7,padding:"5px 7px",marginBottom:6}},
+                return h("div",{key:e.id,onClick:function(){setSel(e);},title:"Ver detalhes",style:{cursor:"pointer",borderLeft:"3px solid "+col,background:"var(--bg)",borderRadius:7,padding:"5px 7px",marginBottom:6}},
                   h("div",{style:{fontSize:11,fontWeight:800,color:col}}, fmtT(e.inicio)+(e.fim?("–"+fmtT(e.fim)):"")),
                   h("div",{style:{fontSize:11.5,fontWeight:600,lineHeight:1.25,color:"var(--ink)",overflow:"hidden"}}, e.titulo||"(sem título)"),
-                  e.meet_link? h("a",{href:e.meet_link,target:"_blank",style:{fontSize:10.5,color:"#3B101D",fontWeight:700}},"Meet") : null
+                  e.meet_link? h("a",{href:e.meet_link,target:"_blank",onClick:function(ev){ev.stopPropagation();},style:{fontSize:10.5,color:"#3B101D",fontWeight:700}},"Meet") : null
                 );
               })
           );
         })
       ),
-    h("div",{style:{marginTop:12,fontSize:11.5,color:"var(--muted)"}},"Agenda do Google — Mateus + Thiago.")
+    h("div",{style:{marginTop:12,fontSize:11.5,color:"var(--muted)"}},"Agenda do Google — Mateus + Thiago."),
+    sel&&h("div",{onClick:function(){setSel(null);},style:{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}},
+      h("div",{onClick:function(ev){ev.stopPropagation();},style:{background:"var(--card)",border:"1px solid var(--line)",borderRadius:14,maxWidth:460,width:"100%",maxHeight:"85vh",overflow:"auto",padding:"18px 20px",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}},
+        h("div",{style:{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}},
+          h("div",{style:{flex:1,fontSize:17,fontWeight:800,lineHeight:1.25}}, sel.titulo||"(sem título)"),
+          h("button",{className:"btn ghost sm",onClick:function(){setSel(null);}},"✕")
+        ),
+        h("div",{style:{display:"flex",alignItems:"center",gap:6,fontSize:12.5,color:"var(--muted)",marginBottom:4}}, dot(MCOL[sel.closer]||"var(--muted)"), (sel.closer||"—")),
+        h("div",{style:{fontSize:13,fontWeight:600,marginBottom:12,textTransform:"capitalize"}}, new Date(sel.inicio).toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",timeZone:"America/Sao_Paulo"})+" · "+fmtT(sel.inicio)+(sel.fim?("–"+fmtT(sel.fim)):"")),
+        sel.meet_link? h("a",{href:sel.meet_link,target:"_blank",className:"btn gold sm",style:{display:"inline-block",marginBottom:12,textDecoration:"none"}},"🎥 Entrar no Meet") : null,
+        h("div",{style:{fontSize:11.5,fontWeight:800,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.5,marginBottom:5}},"Descrição"),
+        h("div",{style:{fontSize:13,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",background:"var(--bg)",border:"1px solid var(--line)",borderRadius:8,padding:"10px 12px"}}, (sel.descricao&&String(sel.descricao).trim())? sel.descricao : "Sem descrição ainda."),
+        (sel.attendees&&sel.attendees.length)? h("div",{style:{marginTop:12}},
+           h("div",{style:{fontSize:11.5,fontWeight:800,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.5,marginBottom:5}},"Participantes"),
+           h("div",{style:{fontSize:12.5,lineHeight:1.5,wordBreak:"break-word"}}, (sel.attendees||[]).map(function(a){return (a&&(a.email||a))||"";}).filter(Boolean).join(", "))
+        ) : null
+      )
+    )
   );
 }
 
