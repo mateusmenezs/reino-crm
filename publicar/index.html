@@ -1100,6 +1100,41 @@ function stagesForPipe(stages,pk){
   var byName={}; vis.forEach(function(s){byName[s.name]=s;});
   return conf.stages.map(function(n){return byName[n];}).filter(Boolean);
 }
+// Etapas que viram coluna no "Tudo". Card em etapa oculta conta como "fora do quadro".
+function nomesNoQuadro(stages){ var m={}; stagesForPipe(stages,"tudo").forEach(function(s){m[s.name]=1;}); return m; }
+// Pipeline comercial = Instagram + WhatsApp (canal do JP e cards criados na mão contam como WhatsApp).
+// Camilla (low ticket) fica fora.
+const CANAIS_WHATSAPP=["whatsapp","jp","manual"];
+const CANAIS_PIPELINE=["instagram"].concat(CANAIS_WHATSAPP);
+// Chaves pra reconhecer a mesma pessoa entre canais e tabelas. Espelham crm_fone8()/crm_igkey() do banco
+// (usadas pelo trigger trg_herda_etapa): telefone placeholder e @ "lixo" de formulário não contam.
+const IG_LIXO={"não":1,"nao":1,"naotenho":1,"nãotenho":1,"nenhum":1,"nenhuma":1,"teste":1,"test":1,"sem":1,"semig":1,"seminstagram":1,"naopossuo":1,"nãopossuo":1,"naouso":1,"nãouso":1,"naotem":1,"nãotem":1,"null":1,"none":1,"instagram":1,"nada":1,"xxx":1,"tenho":1};
+const fone8=(s)=>{ var d=onlyDigits(s); if(d.length<8)return ""; var k=d.slice(-8); return (/(\d)\1{5}/.test(k)||k==="12345678"||k==="87654321")?"":k; };
+const igKey=(s)=>{ var k=String(s||"").trim().toLowerCase().replace(/^.*instagram\.com\//,"").replace(/[?#\/].*$/,"").replace(/[@\s]/g,""); return (k.length>2&&!isNumId(k)&&!IG_LIXO[k])?k:""; };
+const CANAL_LABEL={instagram:"📸 Instagram",whatsapp:"💬 WhatsApp",jp:"🤖 JP · WhatsApp",manual:"✍️ Manual",camilla:"🛍️ Low ticket",evento:"🎟️ Evento"};
+const CANAL_ICON={instagram:"📸",whatsapp:"💬",jp:"🤖",manual:"✍️",camilla:"🛍️",evento:"🎟️"};
+// Quem estava em Nutrição/Perdido e voltou a escrever: o banco cria o card em Novo Lead com retorno=true.
+const retornoTag=(c)=>(c&&c.retorno&&c.kanban_stages&&c.kanban_stages.name==="Novo Lead")
+  ? h("span",{className:"tag",title:"Voltou a escrever. Antes estava em "+(c.retorno_de_stage||"Nutrição/Perdido"),style:{background:"#FFF4E5",color:"#B45309",fontWeight:700}},"🔁 retorno"+(c.retorno_de_stage?" · era "+c.retorno_de_stage:""))
+  : null;
+// Detalhes do card de conversa no Pipeline (próxima ação, agenda, produto, valor, parado) — mesmo visual do antigo quadro por canal.
+function convDetalhes(c,st){
+  var dd=daysSince(c.last_inbound_at), stale=dd!=null&&dd>=3&&!!st&&!st.is_won&&!st.is_lost;
+  var tags=((c.contacts||{}).tags)||[], hasVal=c.deal_value!=null&&c.deal_value!=="";
+  return {
+    stale:stale,
+    linhas:[
+      c.next_action&&h("div",{key:"na",style:{fontSize:12.5,marginTop:7,color:"var(--gold)"}},"⏭ ",c.next_action,c.next_action_at?(" · "+fmtDateBR(c.next_action_at)):""),
+      c.agenda_inicio&&h("div",{key:"ag",style:{fontSize:12,marginTop:7,color:"#3B101D",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},"📅 "+fmtDateBR(c.agenda_inicio), c.closer&&h("span",{style:{fontWeight:700}},"· 🧑‍💼 "+closerLabel(c.closer)), c.agenda_link&&h("a",{href:c.agenda_link,target:"_blank",onClick:e=>e.stopPropagation(),style:{color:"#3B101D",fontWeight:600}},"Meet"))
+    ],
+    tags:[
+      c.produto&&h("span",{key:"pr",className:"tag",style:{background:"#EFEAE3",color:"#3B101D"}},c.produto),
+      (c.garantia===true||c.garantia===false)&&h("span",{key:"ga",className:"tag",style:{background:c.garantia?"#ECFDF5":"#FEF2F2",color:c.garantia?"#059669":"#DC2626"}},c.garantia?"C/ garantia":"S/ garantia"),
+      hasVal&&h("span",{key:"vl",className:"tag",style:{background:"#ECFDF5",color:"#059669"}},brl(c.deal_value)),
+      stale&&h("span",{key:"pa",className:"tag",style:{background:"#FEF2F2",color:"#DC2626"}},"parado "+dd+"d")
+    ].concat(tags.map(function(tg,i){return h("span",{key:"t"+i,className:"tag"},tg);}))
+  };
+}
 function ChannelView({channel,sub,search,account,userId,onToast}){
   const [stages,setStages]=useState([]);
   const [convs,setConvs]=useState(null);
@@ -1113,7 +1148,8 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
   const loadStages=useCallback(async()=>{ const {data}=await sb.from("kanban_stages").select("*").order("position"); setStages(data||[]); },[]);
   const loadConvs=useCallback(async()=>{
     /* em lotes de 1000 (o Supabase corta em 1000 por consulta) */
-    let data=null,error=null; try{ data=await sbAll("conversations","*, contacts(*), kanban_stages(name,color)",function(q){return q.eq("channel",channel).eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}).order("id");}); }catch(e){ error=e; }
+    /* "todos" = caixa única (Instagram + WhatsApp); WhatsApp inclui os cards do JP e os criados na mão (mesma conta do Pipeline) */
+    let data=null,error=null; try{ data=await sbAll("conversations","*, contacts(*), kanban_stages(name,color)",function(q){return (channel==="todos"?q.in("channel",CANAIS_PIPELINE):channel==="whatsapp"?q.in("channel",CANAIS_WHATSAPP):q.eq("channel",channel)).eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}).order("id");}); }catch(e){ error=e; }
     if(error){onToast("Erro: "+error.message);setConvs([]);return;} setConvs(data||[]);
   },[channel]);
   useEffect(()=>{loadStages();},[loadStages]);
@@ -1164,7 +1200,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
   const picOf=c=>ctf(c).profile_pic_url;
   const t=search.trim().toLowerCase();
   const cmatch=c=>!t||[nameOf(c),ctf(c).username,ctf(c).phone].some(v=>(v||"").toLowerCase().includes(t));
-  const icon=channel==="whatsapp"?"💬":"📸";
+  const icon=channel==="instagram"?"📸":"💬";
 
   const onFichaSaved=(patch)=>{ if(!modalConv)return; const cp=(patch&&patch.conv)||{}, cc=(patch&&patch.contact)||{};
     const apply=x=>x?{...x,...cp,contacts:{...(x.contacts||{}),...cc}}:x;
@@ -1174,7 +1210,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
   const modal = modalConv && h("div",{className:"overlay",onClick:()=>setModalConv(null)},
     h("div",{style:{background:"var(--card)",borderRadius:18,width:"100%",maxWidth:940,height:"84vh",display:"flex",overflow:"hidden"},onClick:e=>e.stopPropagation()},
       h("div",{style:{flex:"1 1 58%",display:"flex",flexDirection:"column",borderRight:"1px solid var(--line)",minWidth:0}},
-        h(ConversationPane,{conv:modalConv,channel:channel,account:account,userId:userId,stages:stages,onStageChange:moveStage,onToast:onToast})
+        h(ConversationPane,{conv:modalConv,channel:modalConv.channel||channel,account:account,userId:userId,stages:stages,onStageChange:moveStage,onToast:onToast})
       ),
       h("div",{style:{flex:"0 0 330px",overflowY:"auto"}},
         h(LeadFicha,{conv:modalConv,onToast:onToast,onSaved:onFichaSaved})
@@ -1199,7 +1235,8 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
     }
   });
 
-  const vendaModal = venda && h(VendaModal,{nome:(ctf(venda.conv).full_name||ctf(venda.conv).username||""), whatsapp:(ctf(venda.conv).phone||""), channel:channel, contactId:venda.conv.contact_id, funil0:(venda.conv.funil||(channel==="instagram"?"Social selling":channel==="camilla"?"Low ticket":"")), garantia0:venda.conv.garantia, onClose:()=>setVenda(null),onToast:onToast,
+  const vendaCh = venda ? (venda.conv.channel||channel) : channel;
+  const vendaModal = venda && h(VendaModal,{nome:(ctf(venda.conv).full_name||ctf(venda.conv).username||""), whatsapp:(ctf(venda.conv).phone||""), channel:vendaCh, contactId:venda.conv.contact_id, funil0:(venda.conv.funil||(vendaCh==="instagram"?"Social selling":vendaCh==="camilla"?"Low ticket":"")), garantia0:venda.conv.garantia, onClose:()=>setVenda(null),onToast:onToast,
     onSkip: venda.viaVenda ? function(){ var v=venda; setVenda(null); moveStage(v.conv,v.to,true); onToast("Movido pra Alunos (sem venda registrada)"); } : null,
     onConfirm: async (res)=>{ const cid=venda.conv.id, to=venda.to, viaVenda=venda.viaVenda, contactId=venda.conv.contact_id;
       const stageTrig=viaVenda||to; // etapa que dispara os triggers de venda (Venda)
@@ -1227,8 +1264,11 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
     const openC=convs.filter(c=>{var n=c.kanban_stages&&c.kanban_stages.name; return n&&lostN.indexOf(n)<0&&wonN.indexOf(n)<0;});
     const rFunil=openC.reduce((a,c)=>a+(Number(c.deal_value)||0),0);
     const parados=openC.filter(c=>{var d=daysSince(c.last_inbound_at);return d!=null&&d>=3;}).length;
+    const noQ=nomesNoQuadro(stages);
+    const noQuadro=convs.filter(c=>c.kanban_stages&&noQ[c.kanban_stages.name]).length;
     const sumItems=[
-      {label:"Total",value:convs.length},
+      {label:"Total no quadro",value:noQuadro},
+      convs.length>noQuadro&&{label:"Fora do quadro",value:convs.length-noQuadro,color:"var(--muted)"},
       {label:"Em negociação",value:byName("Em negociação")},
       {label:"Agendados",value:byName("Agendado")+byName("2ª reunião")+byName("Reunião confirmada")},
       {label:"Vendas",value:byName("Venda"),color:"#059669"},
@@ -1257,6 +1297,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
                       (atHandle(ctf(c))||ctf(c).phone)&&h("div",{style:{fontSize:12,color:"var(--muted)"}},atHandle(ctf(c))||("📞 "+ctf(c).phone))
                     )
                   ),
+                  retornoTag(c)&&h("div",{style:{marginTop:7}},retornoTag(c)),
                   c.next_action&&h("div",{style:{fontSize:12.5,marginTop:7,color:"var(--gold)"}},"⏭ ",c.next_action,c.next_action_at?(" · "+fmtDateBR(c.next_action_at)):""),
                   c.agenda_inicio&&h("div",{style:{fontSize:12,marginTop:7,color:"#3B101D",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},"📅 "+fmtDateBR(c.agenda_inicio), c.closer&&h("span",{style:{fontWeight:700}},"· 🧑‍💼 "+closerLabel(c.closer)), c.agenda_link&&h("a",{href:c.agenda_link,target:"_blank",onClick:e=>e.stopPropagation(),style:{color:"#3B101D",fontWeight:600}},"Meet")),
                   (hasVal||stale||tags.length>0||c.garantia===true||c.garantia===false)&&h("div",{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:7}},
@@ -1291,7 +1332,7 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
       ),
       h("div",{className:"citems"},
         convs===null&&h("div",{className:"center",style:{padding:30}},h("div",{className:"spin"})),
-        convs&&convs.length===0&&h("div",{className:"empty"},"Nenhuma conversa ainda.",h("br"),channel==="whatsapp"?"Aparecem aqui quando o WhatsApp da Cris estiver conectado.":"Aparecem aqui quando o Instagram estiver conectado."),
+        convs&&convs.length===0&&h("div",{className:"empty"},"Nenhuma conversa ainda.",h("br"),channel==="whatsapp"?"Aparecem aqui quando o WhatsApp estiver conectado.":channel==="instagram"?"Aparecem aqui quando o Instagram estiver conectado.":"Aparecem aqui quando o Instagram ou o WhatsApp estiverem conectados."),
         convs&&(function(){
           var ocultoNames={}; (stages||[]).forEach(function(s){if(s.oculto)ocultoNames[s.name]=1;});
           var lista=convs.filter(c=>cmatch(c)&&(!closerSel||c.closer===closerSel)&&(!funBoardSel||c.origem===funBoardSel)&&(!stageFilter||c.stage_id===stageFilter)&&(stageFilter||!(c.kanban_stages&&(c.kanban_stages.name==="Não comercial"||ocultoNames[c.kanban_stages.name])))).slice().sort(function(a,b){return rowPrio(b)-rowPrio(a);});
@@ -1316,18 +1357,18 @@ function ChannelView({channel,sub,search,account,userId,onToast}){
             h("div",{className:"avatar"},picOf(c)?h("img",{src:picOf(c)}):initials(nameOf(c))),
             h("div",{className:"info"},
               h("div",{className:"top"},h("span",{className:"nm"},nameOf(c),mark(c)),h("span",{className:"tm"},timeAgo(c.last_message_at))),
-              h("div",{className:"top"},h("span",{className:"pv"},c.kanban_stages?c.kanban_stages.name:""),c.unread_count>0&&h("span",{className:"badge"},c.unread_count))
+              h("div",{className:"top"},h("span",{className:"pv"},(channel==="todos"&&CANAL_ICON[c.channel]?CANAL_ICON[c.channel]+" ":"")+(c.kanban_stages?c.kanban_stages.name:"")+(retornoTag(c)?" · 🔁 retorno":"")),c.unread_count>0&&h("span",{className:"badge"},c.unread_count))
             )
           ))];
         })()
       )
     ),
     !sel? h("div",{className:"thread"},h("div",{className:"center"},h("div",null,h("div",{className:"big"},"💬"),"Selecione uma conversa")))
-    : h("div",{className:"thread"},h(ConversationPane,{key:sel.id,conv:sel,channel:channel,account:account,userId:userId,stages:stages,onStageChange:moveStage,onToast:onToast,onOpenFicha:()=>setModalConv(sel)}))
+    : h("div",{className:"thread"},h(ConversationPane,{key:sel.id,conv:sel,channel:sel.channel||channel,account:account,userId:userId,stages:stages,onStageChange:moveStage,onToast:onToast,onOpenFicha:()=>setModalConv(sel)}))
   ),modal,agendarModal,vendaModal);
 }
 
-/* ===================== TOTAL (todos os leads unificados) ===================== */
+/* ===================== PIPELINE (Instagram + WhatsApp + leads de evento que ainda não viraram conversa) ===================== */
 function TotalBoard({search,account,userId,onToast}){
   const [stages,setStages]=useState([]);
   const [convs,setConvs]=useState(null),[leads,setLeads]=useState(null);
@@ -1337,12 +1378,18 @@ function TotalBoard({search,account,userId,onToast}){
   const [pipeSel,setPipeSel]=useState("tudo");
   const [closerSel,setCloserSel]=useState("");
   const [funBoardSel,setFunBoardSel]=useState("");
+  // Filtro de canal (substitui as abas Instagram/WhatsApp da antiga Prospecção). "" = todos.
+  const [canalSel,setCanalSel]=useState("");
   const [agendar,setAgendar]=useState(null);
   const [venda,setVenda]=useState(null);
   const loadAll=useCallback(async()=>{
     const s=await sb.from("kanban_stages").select("*").order("position"); setStages(s.data||[]);
-    const cvAll=await sbAll("conversations","*, contacts(*), kanban_stages(name,color)",function(q){return q.eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}).order("id");}); setConvs(cvAll||[]);
-    const ld=await sb.from("leads").select("*").order("criado_em",{ascending:false,nullsFirst:false}); setLeads(ld.data||[]);
+    const cvAll=await sbAll("conversations","*, contacts(*), kanban_stages(name,color)",function(q){return q.eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}).order("id");});
+    // Quem já é conversa (em qualquer canal, inclusive Camilla) não aparece de novo como lead de evento.
+    var jaConversa={}; (cvAll||[]).forEach(function(c){ var ct=c.contacts||{}, f=fone8(ct.phone), g=igKey(ct.username); if(f)jaConversa["f"+f]=1; if(g)jaConversa["i"+g]=1; });
+    setConvs((cvAll||[]).filter(function(c){return CANAIS_PIPELINE.indexOf(c.channel)>=0;}));
+    const ld=await sbAll("leads","*",function(q){return q.order("criado_em",{ascending:false,nullsFirst:false}).order("id");});
+    setLeads((ld||[]).filter(function(l){ var f=fone8(l.whatsapp), g=igKey(l.instagram); return !((f&&jaConversa["f"+f])||(g&&jaConversa["i"+g])); }));
   },[]);
   useEffect(()=>{loadAll();},[loadAll]);
 
@@ -1351,6 +1398,7 @@ function TotalBoard({search,account,userId,onToast}){
   (convs||[]).forEach(c=>items.push({type:"conv",id:"c"+c.id,raw:c,name:displayName(c.contacts||{}),sub:atHandle(c.contacts)||((c.contacts&&c.contacts.phone)||""),pic:c.contacts&&c.contacts.profile_pic_url,stageName:c.kanban_stages?c.kanban_stages.name:null,channel:c.channel}));
   (leads||[]).forEach(l=>items.push({type:"lead",id:"l"+l.id,raw:l,name:l.nome||"(sem nome)",sub:l.instagram?("@"+igHandle(l.instagram)):(l.whatsapp||""),pic:null,stageName:l.status,channel:"evento"}));
   const match=it=>!t||[it.name,it.sub].some(v=>(v||"").toLowerCase().includes(t));
+  const canalOk=it=>!canalSel||(canalSel==="evento"?it.type==="lead":canalSel==="whatsapp"?(it.type==="conv"&&CANAIS_WHATSAPP.indexOf(it.channel)>=0):it.channel===canalSel);
 
   const move=async(it,stName,stId,force)=>{
     if(it.type==="conv"){ if(it.raw.stage_id===stId)return;
@@ -1407,13 +1455,19 @@ function TotalBoard({search,account,userId,onToast}){
 
   if(convs===null||leads===null)return h("div",{className:"board"},h("div",{className:"center"},h("div",{className:"spin"})));
 
+  // Conta só o que está em coluna, pra Instagram + WhatsApp + Evento somar exatamente o total.
+  // Etapa oculta/status antigo vai pra "fora do quadro".
+  const noQ=nomesNoQuadro(stages);
+  const noQuadro=items.filter(it=>noQ[it.stageName]);
+  const conta=fn=>noQuadro.filter(fn).length;
   const sumItems=[
-    {label:"Total geral",value:items.length},
-    {label:"📸 Instagram",value:(convs||[]).filter(c=>c.channel==="instagram").length},
-    {label:"💬 WhatsApp",value:(convs||[]).filter(c=>c.channel==="whatsapp").length},
-    {label:"🎟️ Evento",value:(leads||[]).length}
+    {label:"Total no quadro",value:noQuadro.length},
+    {label:"📸 Instagram",value:conta(it=>it.channel==="instagram")},
+    {label:"💬 WhatsApp",value:conta(it=>it.type==="conv"&&CANAIS_WHATSAPP.indexOf(it.channel)>=0)},
+    {label:"🎟️ Evento",value:conta(it=>it.type==="lead")},
+    items.length>noQuadro.length&&{label:"Fora do quadro",value:items.length-noQuadro.length,color:"var(--muted)"}
   ];
-  const badge=ch=>ch==="instagram"?"📸 Instagram":ch==="whatsapp"?"💬 WhatsApp":"🎟️ Evento";
+  const badge=ch=>CANAL_LABEL[ch]||CANAL_LABEL.evento;
 
   const onFichaSaved=(patch)=>{ if(!modalConv)return; const cp=(patch&&patch.conv)||{}, cc=(patch&&patch.contact)||{};
     const apply=x=>x?{...x,...cp,contacts:{...(x.contacts||{}),...cc}}:x;
@@ -1441,15 +1495,17 @@ function TotalBoard({search,account,userId,onToast}){
 
   return h(Fr,null,
     h(Summary,{items:sumItems}),
+    h("div",{className:"subtabs"},[h("span",{key:"chlbl",style:{alignSelf:"center",fontSize:11,color:"var(--muted)",margin:"0 4px 0 0"}},"Canal:")].concat([["","Todos"],["instagram","📸 Instagram"],["whatsapp","💬 WhatsApp"],["evento","🎟️ Evento"]].map(function(o){return h("button",{key:"ch_"+(o[0]||"todos"),className:"subtab"+(canalSel===o[0]?" active":""),onClick:function(){setCanalSel(o[0]);}},o[1]);}))),
     h("div",{className:"subtabs"},["tudo","aquisicao","vendas"].map(function(pk){return h("button",{key:pk,className:"subtab"+(pipeSel===pk?" active":""),onClick:function(){setPipeSel(pk);}},pk==="tudo"?"Tudo":PIPELINES[pk].label);}).concat([h("span",{key:"cllbl",style:{alignSelf:"center",fontSize:11,color:"var(--muted)",margin:"0 4px 0 12px"}},"Closer:"),h("button",{key:"cl_all",className:"subtab"+(closerSel===""?" active":""),onClick:function(){setCloserSel("");}},"Todos")].concat(CLOSERS.map(function(o){return h("button",{key:"cl_"+o[0],className:"subtab"+(closerSel===o[0]?" active":""),onClick:function(){setCloserSel(o[0]);}},o[1]);})).concat([h("select",{key:"funsel",value:funBoardSel,onChange:function(e){setFunBoardSel(e.target.value);},style:{marginLeft:12,padding:"4px 8px",border:"1px solid var(--line)",borderRadius:8,fontSize:12,background:"var(--card)",color:"var(--ink)"}},[h("option",{key:"_f",value:""},"🫙 Todos os funis")].concat(ORIGENS.map(function(o){return h("option",{key:"f_"+o[0],value:o[0]},o[1]);})))]))),
     h(BoardScroller,null, stagesForPipe(stages,pipeSel).map(st=>{
-      const cards=items.filter(it=>it.stageName===st.name&&match(it)&&(!closerSel||(it.raw&&it.raw.closer===closerSel))&&(!funBoardSel||(it.raw&&it.raw.origem===funBoardSel)));
+      const cards=items.filter(it=>it.stageName===st.name&&match(it)&&canalOk(it)&&(!closerSel||(it.raw&&it.raw.closer===closerSel))&&(!funBoardSel||(it.raw&&it.raw.origem===funBoardSel)));
       return h("div",{key:st.id,className:"col"+(over===st.name?" drop":""),
         onDragOver:e=>{e.preventDefault();setOver(st.name);},onDragLeave:()=>setOver(o=>o===st.name?null:o),
         onDrop:e=>{e.preventDefault();setOver(null);if(drag)move(drag,st.name,st.id);setDrag(null);}},
         h("div",{className:"col-head"},h("span",{className:"pill",style:{background:st.color}}),h("span",{className:"name"},st.name),h("span",{className:"count"},cards.length)),
-        h("div",{className:"col-body"}, cards.map(it=>h("div",{key:it.id,className:"card"+(drag&&drag.id===it.id?" dragging":""),draggable:true,
-          style:(mergeOver===it.id&&drag&&drag.type==="conv"&&it.type==="conv"&&drag.id!==it.id)?{outline:"2px dashed var(--gold)",outlineOffset:2}:null,
+        h("div",{className:"col-body"}, cards.map(it=>{ const det=it.type==="conv"?convDetalhes(it.raw,st):null;
+          return h("div",{key:it.id,className:"card"+(drag&&drag.id===it.id?" dragging":""),draggable:true,
+          style:Object.assign({}, det&&det.stale?{borderLeft:"3px solid #EF4444"}:null, (mergeOver===it.id&&drag&&drag.type==="conv"&&it.type==="conv"&&drag.id!==it.id)?{outline:"2px dashed var(--gold)",outlineOffset:2}:null),
           onClick:()=>{ if(it.type==="conv")setModalConv(it.raw); else setEditLead(it.raw); },
           onDragStart:()=>setDrag(it),onDragEnd:()=>setDrag(null),
           onDragOver:e=>{ if(drag&&drag.type==="conv"&&it.type==="conv"&&drag.id!==it.id){ e.preventDefault();e.stopPropagation();setMergeOver(it.id);} },
@@ -1459,8 +1515,9 @@ function TotalBoard({search,account,userId,onToast}){
             h("div",{className:"avatar",style:{width:32,height:32,fontSize:12}},it.pic?h("img",{src:it.pic}):initials(it.name)),
             h("div",{style:{minWidth:0}},h("div",{className:"nm"},it.name),it.sub&&h("div",{style:{fontSize:12,color:"var(--muted)"}},it.sub))
           ),
-          h("div",{style:{marginTop:6}},h("span",{className:"tag"},badge(it.channel)))
-        ))),
+          det&&det.linhas,
+          h("div",{style:{marginTop:6,display:"flex",gap:6,flexWrap:"wrap"}},h("span",{className:"tag"},badge(it.channel)),it.type==="conv"&&retornoTag(it.raw),det&&det.tags)
+        ); })),
         cards.length===0&&h("div",{className:"empty",style:{padding:14}},"—")
       );
     })),
@@ -2514,10 +2571,10 @@ function RotinaCrisView({onToast}){
       var now=new Date().toISOString();
       var d3=new Date(Date.now()-3*86400000).toISOString();
       var t0=hojeStr()+"T00:00:00-03:00", t1=hojeStr()+"T23:59:59-03:00";
-      var des=await sb.from("conversations").select("id,agenda_inicio,contacts(full_name,username,phone),kanban_stages(name)").in("channel",["instagram","whatsapp"]).lt("agenda_inicio",now).is("call_status",null).is("call_em",null);
+      var des=await sb.from("conversations").select("id,agenda_inicio,contacts(full_name,username,phone),kanban_stages(name)").in("channel",CANAIS_PIPELINE).lt("agenda_inicio",now).is("call_status",null).is("call_em",null);
       var desf=(des.data||[]).filter(function(c){return c.kanban_stages&&(c.kanban_stages.name==="Agendado"||c.kanban_stages.name==="2ª reunião"||c.kanban_stages.name==="Reunião confirmada");});
       var con=await sb.from("conversations").select("deal_value,contrato_enviado_em,contacts(full_name,phone)").eq("contrato_status","pending").is("contrato_assinado_em",null).order("contrato_enviado_em");
-      var par=await sb.from("conversations").select("id,last_inbound_at,contacts(full_name,username),kanban_stages(name,is_won,is_lost,oculto)").in("channel",["instagram","whatsapp"]).eq("is_archived",false).lt("last_inbound_at",d3);
+      var par=await sb.from("conversations").select("id,last_inbound_at,contacts(full_name,username),kanban_stages(name,is_won,is_lost,oculto)").in("channel",CANAIS_PIPELINE).eq("is_archived",false).lt("last_inbound_at",d3);
       var parados=(par.data||[]).filter(function(c){return c.kanban_stages&&!c.kanban_stages.is_won&&!c.kanban_stages.is_lost&&!c.kanban_stages.oculto&&c.kanban_stages.name!=="Novo Lead"&&c.kanban_stages.name!=="Nutrição";});
       var ag=await sb.from("agenda_eventos").select("closer,titulo,inicio,fim,meet_link").gte("inicio",t0).lte("inicio",t1).order("inicio");
       setD({desf:desf,con:(con.data||[]),parados:parados,agenda:(ag.data||[])});
@@ -2551,6 +2608,7 @@ function OnboardingView({onToast}){
   const [rows,setRows]=useState(null);
   const [sel,setSel]=useState(null);
   const [drag,setDrag]=useState(null),[over,setOver]=useState(null);
+  const [fProd,setFProd]=useState("Todos"),[fTipo,setFTipo]=useState("Todos"); // filtros de produto/tipo (vieram da Entrega 1º mês na fusão)
   function isMensal(c){ var fp=((c.forma_pagamento||"")+"").toLowerCase(); if(fp.indexOf("boleto")>=0)return true; var pl=c.pgto_plano; if(Array.isArray(pl)&&pl.length>=2){ return pl.filter(function(p){return p&&p.pago!==true;}).length>=1; } return false; }
   const load=useCallback(async function(){
     var r=await sb.from("conversations").select("id,produto,venda_em,form_contrato_enviado_em,form_contrato_ok_em,contrato_enviado_em,contrato_assinado_em,briefing_enviado_em,briefing_ok_em,briefing_respostas,briefing_fup_nivel,impl_plano,diagnostico_texto,diagnostico_etapa,grupo_link,funil,origem,lt_origem,qualificacao,forma_pagamento,pgto_plano,contacts(full_name,phone,email)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false});
@@ -3191,6 +3249,7 @@ function AgendaView({onToast}){
   const [wStart,setWStart]=useState(mondayOf(today));
   const [evs,setEvs]=useState(null);
   const [filtro,setFiltro]=useState("ambos");
+  const [sel,setSel]=useState(null);
   const load=useCallback(async function(){
     setEvs(null);
     var ini=wStart+"T00:00:00-03:00", fim=ymdAdd(wStart,7)+"T00:00:00-03:00";
@@ -3231,16 +3290,60 @@ function AgendaView({onToast}){
             h("div",{style:{fontSize:12,fontWeight:800,color:isToday?"var(--accent)":"var(--ink)",marginBottom:8,textTransform:"capitalize",borderBottom:"1px solid var(--line)",paddingBottom:6}}, lbl, isToday?" • hoje":""),
             dayEvs.length===0? h("div",{style:{fontSize:11.5,color:"var(--muted)",padding:"6px 2px"}},"livre")
             : dayEvs.map(function(e){ var col=MCOL[e.closer]||"var(--muted)";
-                return h("div",{key:e.id,title:(e.closer||"")+": "+(e.titulo||""),style:{borderLeft:"3px solid "+col,background:"var(--bg)",borderRadius:7,padding:"5px 7px",marginBottom:6}},
+                return h("div",{key:e.id,onClick:function(){setSel(e);},title:"Ver detalhes",style:{cursor:"pointer",borderLeft:"3px solid "+col,background:"var(--bg)",borderRadius:7,padding:"5px 7px",marginBottom:6}},
                   h("div",{style:{fontSize:11,fontWeight:800,color:col}}, fmtT(e.inicio)+(e.fim?("–"+fmtT(e.fim)):"")),
                   h("div",{style:{fontSize:11.5,fontWeight:600,lineHeight:1.25,color:"var(--ink)",overflow:"hidden"}}, e.titulo||"(sem título)"),
-                  e.meet_link? h("a",{href:e.meet_link,target:"_blank",style:{fontSize:10.5,color:"#3B101D",fontWeight:700}},"Meet") : null
+                  e.meet_link? h("a",{href:e.meet_link,target:"_blank",onClick:function(ev){ev.stopPropagation();},style:{fontSize:10.5,color:"#3B101D",fontWeight:700}},"Meet") : null
                 );
               })
           );
         })
       ),
-    h("div",{style:{marginTop:12,fontSize:11.5,color:"var(--muted)"}},"Agenda do Google — Mateus + Thiago.")
+    h("div",{style:{marginTop:12,fontSize:11.5,color:"var(--muted)"}},"Agenda do Google — Mateus + Thiago."),
+    sel&&h("div",{onClick:function(){setSel(null);},style:{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}},
+      h("div",{onClick:function(ev){ev.stopPropagation();},style:{background:"var(--card)",border:"1px solid var(--line)",borderRadius:14,maxWidth:460,width:"100%",maxHeight:"85vh",overflow:"auto",padding:"18px 20px",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}},
+        h("div",{style:{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}},
+          h("div",{style:{flex:1,fontSize:17,fontWeight:800,lineHeight:1.25}}, sel.titulo||"(sem título)"),
+          h("button",{className:"btn ghost sm",onClick:function(){setSel(null);}},"✕")
+        ),
+        h("div",{style:{display:"flex",alignItems:"center",gap:6,fontSize:12.5,color:"var(--muted)",marginBottom:4}}, dot(MCOL[sel.closer]||"var(--muted)"), (sel.closer||"—")),
+        h("div",{style:{fontSize:13,fontWeight:600,marginBottom:12,textTransform:"capitalize"}}, new Date(sel.inicio).toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",timeZone:"America/Sao_Paulo"})+" · "+fmtT(sel.inicio)+(sel.fim?("–"+fmtT(sel.fim)):"")),
+        sel.meet_link? h("a",{href:sel.meet_link,target:"_blank",className:"btn gold sm",style:{display:"inline-block",marginBottom:12,textDecoration:"none"}},"🎥 Entrar no Meet") : null,
+        h("div",{style:{fontSize:11.5,fontWeight:800,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.5,marginBottom:5}},"Descrição"),
+        h("div",{style:{fontSize:13,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",background:"var(--bg)",border:"1px solid var(--line)",borderRadius:8,padding:"10px 12px"}}, (sel.descricao&&String(sel.descricao).trim())? sel.descricao : "Sem descrição ainda."),
+        (sel.attendees&&sel.attendees.length)? h("div",{style:{marginTop:12}},
+           h("div",{style:{fontSize:11.5,fontWeight:800,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.5,marginBottom:5}},"Participantes"),
+           h("div",{style:{fontSize:12.5,lineHeight:1.5,wordBreak:"break-word"}}, (sel.attendees||[]).map(function(a){return (a&&(a.email||a))||"";}).filter(Boolean).join(", "))
+        ) : null
+      )
+    )
+  );
+}
+
+/* ===================== CONVERSAS (caixa de entrada única: Instagram + WhatsApp, filtro de canal) ===================== */
+function lerPref(k,validos,padrao){ try{ var v=localStorage.getItem(k); return validos.indexOf(v)>=0?v:padrao; }catch(e){ return padrao; } }
+function gravarPref(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function ConversasView({search,account,userId,onToast}){
+  var OPTS=[["todos","Todos"],["instagram","📸 Instagram"],["whatsapp","💬 WhatsApp"]];
+  const [canal,setCanal]=useState(function(){ return lerPref("reino_conversas_canal",OPTS.map(function(o){return o[0];}),"todos"); });
+  return h(Fr,null,
+    h("div",{className:"subtabs"},
+      OPTS.map(function(o){ return h("button",{key:o[0],className:"subtab"+(canal===o[0]?" active":""),onClick:function(){ setCanal(o[0]); gravarPref("reino_conversas_canal",o[0]); }},o[1]); }),
+      canal!=="whatsapp"&&h(JPSwitch,{key:"jpsw",onToast:onToast})),
+    h(ChannelView,{key:canal,channel:canal,sub:"inbox",search:search,account:account,userId:userId,onToast:onToast})
+  );
+}
+
+/* ===================== CLIENTES (Entrega numa tela só: Jornada · Tráfego · CS / Pagamentos) ===================== */
+function ClientesView({search,onToast,isAdmin}){
+  var OPTS=[["jornada","🧭 Jornada"],["trafego","📣 Tráfego"],["cs","💳 CS / Pagamentos"]];
+  const [aba,setAba]=useState(function(){ return lerPref("reino_clientes_aba",OPTS.map(function(o){return o[0];}),"jornada"); });
+  return h(Fr,null,
+    h("div",{className:"subtabs"},
+      OPTS.map(function(o){ return h("button",{key:o[0],className:"subtab"+(aba===o[0]?" active":""),onClick:function(){ setAba(o[0]); gravarPref("reino_clientes_aba",o[0]); }},o[1]); })),
+    aba==="jornada"&&h(OnboardingView,{onToast:onToast}),
+    aba==="trafego"&&h(TrafegoView,{onToast:onToast}),
+    aba==="cs"&&h(CSBoard,{search:search,onToast:onToast,isAdmin:isAdmin})
   );
 }
 
@@ -3268,13 +3371,15 @@ function Shell({session}){
   function criarQuadro(escopo){ setNovoQ({escopo:escopo,nome:escopo==='pessoal'?"Meu quadro":""}); }
   async function salvarNovoQ(){ var nq=novoQ; if(!nq||!nq.nome.trim())return onToast("Dê um nome ao quadro."); var r=await sb.from("quadros").insert([{nome:nq.nome.trim(),escopo:nq.escopo,dono_id:(nq.escopo==='pessoal'?session.user.id:null),criado_por:session.user.id}]).select("id").maybeSingle(); if(r.error)return onToast("Erro: "+r.error.message); setNovoQ(null); await loadQuadros(); if(r.data&&r.data.id) setTab("q:"+r.data.id); }
   const isAdmin = me && me.role==="admin";
+  // Lado Comercial enxuto (05/11/2026, Mateus). Fora do menu, mas com a tela ainda no código (pra voltar, recolocar a chave aqui):
+  // lowticket, contratos, pesquisa, mentorados. ig/whatsapp_cris viraram "Conversas" + filtro de canal no Pipeline;
+  // onboarding/trafego/cs viraram abas de "Clientes".
   var GROUPS=[
     ["Hoje",[["painel","Painel"]],"comercial"],
-    ["Comercial",[["total","Pipeline"],["lowticket","Low ticket"],["agenda","Agenda"],["contatos","Contatos"],["contratos","Contratos presos"],["playbooks","Playbooks ↗"]],"comercial"],
-    ["Prospecção",[["ig","Instagram"],["whatsapp_cris","WhatsApp"]],"comercial"],
-    ["Entrega",[["onboarding","Jornada"],["mentorados","Mentorados"],["trafego","Clientes"],["cs","CS / Pagamentos"]],"comercial"],
+    ["Comercial",[["conversas","Conversas"],["total","Pipeline"],["agenda","Agenda"],["contatos","Contatos"],["playbooks","Playbooks ↗"]],"comercial"],
+    ["Entrega",[["clientes","Clientes"]],"comercial"],
     ["Meu dia",[["rotinacris","Rotina do dia"],["rotina","Minhas tarefas"]],"gestao"],
-    ["Gestão",[["relatorio","Desempenho"],["time","Time"],["pesquisa","Pesquisa"]],"gestao"]
+    ["Gestão",[["relatorio","Desempenho"],["time","Time"]],"gestao"]
   ];
   var ADMIN_ONLY={time:1,relatorio:1};
   var byKey={}; GROUPS.forEach(function(g){ g[1].forEach(function(t){ byKey[t[0]]=t; }); });
@@ -3321,6 +3426,8 @@ function Shell({session}){
         h("button",{className:"subtab"+(sub==="pipe"?" active":""),onClick:()=>setSub("pipe")},"📊 Pipeline"),
         tab==="ig"&&h(JPSwitch,{key:"jpsw",onToast:onToast})
       ),
+      tab==="conversas"&&h(ConversasView,{search:search,account:account,userId:session.user.id,onToast:onToast}),
+      tab==="clientes"&&h(ClientesView,{search:search,onToast:onToast,isAdmin:isAdmin}),
       tab==="ig"&&h(ChannelView,{channel:"instagram",sub:sub,search:search,account:account,userId:session.user.id,onToast:onToast}),
       tab==="whatsapp_cris"&&h(ChannelView,{channel:"whatsapp",sub:sub,search:search,account:account,userId:session.user.id,onToast:onToast}),
       tab==="evento_presencial"&&h(LeadsBoard,{pipeKey:"evento_presencial",search:search,onToast:onToast}),
