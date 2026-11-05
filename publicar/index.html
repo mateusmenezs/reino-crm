@@ -3335,12 +3335,72 @@ function ConversasView({search,account,userId,onToast}){
 }
 
 /* ===================== CLIENTES (Entrega numa tela só: Jornada · Tráfego · CS / Pagamentos) ===================== */
+/* ===== Clientes em ENTREGA — lista simples dividida em Onboarding / Execução =====
+   Onboarding = da venda até o fim da Call 2 (entrega_calls ordem 2 ainda sem feita_em).
+   Execução   = depois da Call 2 (ordem 2 com feita_em).
+   Campos: Nome (contacts.full_name), Instagram/Nicho/Objetivo (conversations.briefing_*),
+   Produto (conversations.produto). Enquanto o briefing não roda, briefing_* ficam nulos:
+   Instagram cai pro @ do mentorado se houver; nicho/objetivo mostram "—". */
+function ClientesEntregaView({modo,onToast}){
+  const [rows,setRows]=useState(null);
+  const load=useCallback(async function(){
+    var r=await sb.from("conversations").select("id,produto,venda_em,briefing_instagram,briefing_nicho,briefing_objetivo,contacts(full_name)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false});
+    var convs=r.data||[]; var ids=convs.map(function(c){return c.id;});
+    var c2={},igm={};
+    try{ if(ids.length){
+      var ec=await sb.from("entrega_calls").select("conversation_id,ordem,feita_em").eq("ordem",2).in("conversation_id",ids);
+      (ec.data||[]).forEach(function(x){ if(x.feita_em)c2[x.conversation_id]=true; });
+      var mm=await sb.from("mentorados").select("source_conversation_id,instagram").in("source_conversation_id",ids);
+      (mm.data||[]).forEach(function(m){ if(m.source_conversation_id&&m.instagram)igm[m.source_conversation_id]=m.instagram; });
+    } }catch(e){}
+    setRows(convs.map(function(c){ return {
+      id:c.id,
+      nome:(c.contacts&&c.contacts.full_name)||"(sem nome)",
+      produto:c.produto||"—",
+      instagram:c.briefing_instagram||igm[c.id]||"",
+      nicho:c.briefing_nicho||"",
+      objetivo:c.briefing_objetivo||"",
+      call2:!!c2[c.id]
+    }; }));
+  },[]);
+  useEffect(function(){load();},[load]);
+  if(rows===null)return h("div",{className:"center",style:{height:"40vh"}},h("div",{className:"spin"}));
+  var vis=rows.filter(function(x){ return modo==="execucao"?x.call2:!x.call2; });
+  var em=function(v){ return (v&&String(v).trim())?String(v).trim():null; };
+  var igClean=function(v){ return String(v||"").trim().replace(/^@+/,""); };
+  var campo=function(lbl,val,ehIg){ var t=em(val);
+    return h("div",{style:{display:"flex",gap:6,fontSize:12.5,lineHeight:1.55}},
+      h("span",{style:{color:"var(--muted)",fontWeight:700,minWidth:74,flexShrink:0}},lbl),
+      t?(ehIg?h("a",{href:"https://instagram.com/"+igClean(t),target:"_blank",rel:"noopener",style:{color:"var(--accent)",fontWeight:600,textDecoration:"none",wordBreak:"break-word"}},"@"+igClean(t)):h("span",{style:{color:"var(--ink)",wordBreak:"break-word"}},t))
+       :h("span",{style:{color:"var(--muted)"}},"—"));
+  };
+  var vazio=modo==="execucao"?"Nenhum cliente em execução ainda — eles entram aqui quando a Call 2 é marcada como feita.":"Nenhum cliente em onboarding no momento.";
+  return h(Fr,null,
+    h("div",{style:{padding:"4px 20px 0",fontSize:12.5,color:"var(--muted)"}},
+      modo==="execucao"?"Clientes que já passaram da Call 2 — em execução. ":"Clientes da venda até o fim da Call 2 — em onboarding. ",
+      h("b",null,vis.length+" cliente(s)"),"."),
+    vis.length===0
+      ? h("div",{className:"empty",style:{padding:"28px 20px",color:"var(--muted)"}},vazio)
+      : h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(258px,1fr))",gap:12,padding:"14px 20px 28px"}},
+          vis.map(function(x){ return h("div",{key:x.id,style:{background:"var(--card)",border:"1px solid var(--line)",borderRadius:14,padding:"13px 15px"}},
+            h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:9}},
+              h("div",{style:{fontWeight:800,fontSize:14.5,color:"var(--ink)",minWidth:0,wordBreak:"break-word"}},x.nome),
+              h("span",{style:{fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,color:"var(--accent)",background:"var(--bg)",border:"1px solid var(--line)",borderRadius:999,padding:"3px 9px",whiteSpace:"nowrap",flexShrink:0}},x.produto)),
+            campo("Instagram",x.instagram,true),
+            campo("Nicho",x.nicho),
+            campo("Objetivo",x.objetivo)
+          ); })
+        )
+  );
+}
 function ClientesView({search,onToast,isAdmin}){
-  var OPTS=[["jornada","🧭 Jornada"],["trafego","📣 Tráfego"],["cs","💳 CS / Pagamentos"]];
-  const [aba,setAba]=useState(function(){ return lerPref("reino_clientes_aba",OPTS.map(function(o){return o[0];}),"jornada"); });
+  var OPTS=[["onboarding","🚀 Onboarding"],["execucao","⚡ Execução"],["jornada","🧭 Jornada"],["trafego","📣 Tráfego"],["cs","💳 CS / Pagamentos"]];
+  const [aba,setAba]=useState(function(){ return lerPref("reino_clientes_aba",OPTS.map(function(o){return o[0];}),"onboarding"); });
   return h(Fr,null,
     h("div",{className:"subtabs"},
       OPTS.map(function(o){ return h("button",{key:o[0],className:"subtab"+(aba===o[0]?" active":""),onClick:function(){ setAba(o[0]); gravarPref("reino_clientes_aba",o[0]); }},o[1]); })),
+    aba==="onboarding"&&h(ClientesEntregaView,{key:"onb",modo:"onboarding",onToast:onToast}),
+    aba==="execucao"&&h(ClientesEntregaView,{key:"exe",modo:"execucao",onToast:onToast}),
     aba==="jornada"&&h(OnboardingView,{onToast:onToast}),
     aba==="trafego"&&h(TrafegoView,{onToast:onToast}),
     aba==="cs"&&h(CSBoard,{search:search,onToast:onToast,isAdmin:isAdmin})
@@ -3466,12 +3526,39 @@ function ThemeToggle(){
   const [dark,setDark]=useState(function(){return document.documentElement.getAttribute("data-theme")==="dark";});
   return h("button",{className:"out",title:"Alternar tema claro/escuro",style:{marginRight:4},onClick:function(){var nd=!dark;document.documentElement.setAttribute("data-theme",nd?"dark":"light");try{localStorage.setItem("reino-theme",nd?"dark":"light");}catch(e){}setDark(nd);}}, dark?"☀ claro":"🌙 escuro");
 }
+/* Tela de "defina sua senha" — aparece quando o usuário chega por um link de
+   recuperação/convite (type=recovery). Serve pro 1º acesso de quem o admin criou
+   e pra qualquer "esqueci a senha". Não afeta o login normal. */
+function SetPassword({email,onDone}){
+  const [pw,setPw]=useState(""),[pw2,setPw2]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false),[ok,setOk]=useState(false);
+  const go=async()=>{ setErr(""); if((pw||"").length<8){setErr("Use pelo menos 8 caracteres.");return;} if(pw!==pw2){setErr("As senhas não conferem.");return;} setBusy(true);
+    const {error}=await sb.auth.updateUser({password:pw}); setBusy(false);
+    if(error){setErr(error.message||"Não foi possível salvar a senha.");return;} setOk(true); setTimeout(function(){ onDone&&onDone(); },1400); };
+  return h("div",{className:"login"},
+    h("div",{className:"box"},
+      h("h1",null,"Reino ",h("b",null,"CRM")),
+      h("p",null,"Defina sua senha de acesso"+(email?(" ("+email+")"):"")+"."),
+      ok&&h("div",{className:"err",style:{background:"#DCFCE7",color:"#166534"}},"Senha salva! Entrando…"),
+      err&&h("div",{className:"err"},err),
+      h("input",{placeholder:"Nova senha",type:"password",value:pw,onChange:function(e){setPw(e.target.value);},onKeyDown:function(e){e.key==='Enter'&&go();}}),
+      h("input",{placeholder:"Confirme a senha",type:"password",value:pw2,onChange:function(e){setPw2(e.target.value);},onKeyDown:function(e){e.key==='Enter'&&go();}}),
+      h("button",{onClick:go,disabled:busy||ok}, busy?"Salvando…":"Salvar senha")
+    )
+  );
+}
 function App(){
   const [session,setSession]=useState(undefined);
+  const [recovery,setRecovery]=useState(function(){ try{ var hs=(location.hash||"")+" "+(location.search||""); return /type=recovery/.test(hs); }catch(e){ return false; } });
   useEffect(()=>{ const el=document.getElementById("root"); if(el) el.setAttribute("data-mounted","1"); },[]);
-  useEffect(()=>{ sb.auth.getSession().then(({data})=>setSession(data.session));
-    const {data:{subscription}}=sb.auth.onAuthStateChange((_e,s)=>setSession(s)); return ()=>subscription.unsubscribe(); },[]);
+  useEffect(()=>{
+    // Link de definição de senha (1º acesso / "esqueci a senha"): vem como #rt=<token_hash>.
+    // Trocamos por uma sessão de recuperação via verifyOtp (não depende da allowlist de redirect).
+    try{ var m=(location.hash||"").match(/[#&]rt=([^&]+)/); if(m){ setRecovery(true);
+      sb.auth.verifyOtp({type:"recovery",token_hash:decodeURIComponent(m[1])}).then(function(r){ if(r.error){ console.warn("recovery:",r.error.message); } }); } }catch(e){}
+    sb.auth.getSession().then(({data})=>setSession(data.session));
+    const {data:{subscription}}=sb.auth.onAuthStateChange((e,s)=>{ if(e==="PASSWORD_RECOVERY")setRecovery(true); setSession(s); }); return ()=>subscription.unsubscribe(); },[]);
   if(session===undefined)return h("div",{className:"login"},h("div",{className:"spin"}));
+  if(session&&recovery)return h(SetPassword,{email:(session.user&&session.user.email)||"",onDone:function(){ setRecovery(false); try{ history.replaceState(null,"",location.pathname); }catch(e){} }});
   if(!session)return h(Login);
   return h(Shell,{session:session});
 }
