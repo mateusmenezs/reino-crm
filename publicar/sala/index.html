@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sala ao vivo · REINO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--vinho:#3B101D;--vinho-escuro:#210C13;--laranja:#FF4D00;--claro:#F5F3ED;--apoio:rgba(245,243,237,.72);--linha:rgba(245,243,237,.16)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--vinho-escuro);color:var(--claro);font-family:Manrope,system-ui,sans-serif;font-size:16px;line-height:1.5;min-height:100%}
+button,input{font:inherit}
+.hide{display:none!important}
+.wrap{max-width:1040px;margin:0 auto;padding:16px}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;background:var(--laranja);color:var(--vinho);border:0;border-radius:0;font-weight:800;text-transform:uppercase;letter-spacing:.06em;min-height:58px;padding:0 20px;cursor:pointer;text-decoration:none;
+clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%)}
+.btn:disabled{opacity:.6;cursor:wait}
+.btn:focus-visible,input:focus-visible,.opt:focus-visible{outline:3px solid var(--claro);outline-offset:2px}
+
+/* Gate */
+#gate{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+.gate-card{width:100%;max-width:420px}
+.gate-card svg{width:48px;height:auto;margin-bottom:24px}
+.gate-card h1{font-family:Anton,sans-serif;font-weight:400;text-transform:uppercase;font-size:clamp(30px,8vw,40px);line-height:1.1;margin-bottom:8px}
+.gate-card p{color:var(--apoio);margin-bottom:24px}
+label{display:block;font-weight:700;font-size:14px;margin:0 0 6px}
+input{width:100%;min-height:52px;background:var(--vinho);color:var(--claro);border:1px solid var(--linha);border-radius:0;padding:0 14px;margin-bottom:16px;font-size:17px}
+input::placeholder{color:rgba(245,243,237,.4)}
+.erro{color:var(--laranja);font-weight:700;font-size:14px;margin:-6px 0 14px}
+.miudo{font-size:12px;color:var(--apoio);margin-top:14px;text-align:center}
+
+/* Sala */
+header{display:flex;align-items:center;gap:12px;padding:12px 0 16px}
+header svg{width:32px;height:auto;flex:none}
+header h2{font-weight:800;font-size:16px;line-height:1.3;flex:1}
+.badge{font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:6px 10px;border:1px solid var(--linha);white-space:nowrap}
+.badge.live{background:var(--laranja);color:var(--vinho);border-color:var(--laranja)}
+.badge.live::before{content:"● "}
+.player{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+.player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.espera{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;background:var(--vinho)}
+.espera strong{font-family:Anton,sans-serif;font-weight:400;font-size:clamp(24px,5vw,40px);text-transform:uppercase;line-height:1.1}
+.espera span{color:var(--apoio);margin-top:8px}
+.card{background:var(--vinho);border:1px solid var(--linha);padding:20px;margin-top:16px}
+.card h3{font-weight:800;font-size:18px;margin-bottom:14px}
+.opts{display:grid;gap:10px}
+.opt{display:flex;align-items:center;min-height:52px;padding:0 16px;background:var(--vinho-escuro);color:var(--claro);border:1px solid var(--linha);text-align:left;cursor:pointer;font-weight:600}
+.opt:hover{border-color:var(--laranja)}
+.ok{color:var(--laranja);font-weight:800}
+.cta{background:var(--claro);color:var(--vinho);border:0}
+.cta h3{font-family:Anton,sans-serif;font-weight:400;text-transform:uppercase;font-size:clamp(24px,5vw,32px);line-height:1.1;margin-bottom:8px}
+.cta p{margin-bottom:16px;font-weight:500}
+.ola{color:var(--apoio);font-size:14px;margin-top:14px}
+@media(min-width:900px){.grid{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}.grid .card:first-child{margin-top:0}}
+</style>
+</head>
+<body>
+
+<!-- ENTRADA -->
+<section id="gate" class="hide">
+  <form class="gate-card" id="form" novalidate>
+    <svg viewBox="0 0 88 84" role="img" aria-label="Símbolo Reino"><g fill="#F5F3ED"><path d="M12 72V12H68V44H44V28H28V72Z"/><path d="M40 48H56L76 72H54L40 56Z"/></g></svg>
+    <h1 id="gTitulo">Sala ao vivo</h1>
+    <p>Digite seu nome e WhatsApp para entrar.</p>
+    <label for="nome">Seu nome</label>
+    <input id="nome" autocomplete="given-name" placeholder="Como você quer ser chamado" required>
+    <label for="tel">WhatsApp com DDD</label>
+    <input id="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="(21) 99999-9999" required>
+    <div class="erro hide" id="erro"></div>
+    <button class="btn" id="entrar" type="submit">Entrar na sala</button>
+    <div class="miudo">Usamos seu WhatsApp só para falar com você sobre este evento.</div>
+  </form>
+</section>
+
+<!-- SALA -->
+<main id="sala" class="wrap hide">
+  <header>
+    <svg viewBox="0 0 88 84" aria-hidden="true"><g fill="#F5F3ED"><path d="M12 72V12H68V44H44V28H28V72Z"/><path d="M40 48H56L76 72H54L40 56Z"/></g></svg>
+    <h2 id="titulo"></h2>
+    <span class="badge" id="badge"></span>
+  </header>
+  <div class="grid">
+    <div>
+      <div class="player" id="player"></div>
+      <div class="ola" id="ola"></div>
+    </div>
+    <div id="lateral">
+      <div class="card hide" id="enquete">
+        <h3 id="pergunta"></h3>
+        <div class="opts" id="opts"></div>
+      </div>
+      <div class="card hide" id="enqueteOk"><span class="ok">✓ Resposta registrada.</span> Obrigado!</div>
+      <div class="card cta hide" id="cta">
+        <h3>Sua sessão individual</h3>
+        <p>Escolha um horário para conversar com o time e montar o seu plano.</p>
+        <a class="btn" id="ctaBtn" target="_blank" rel="noopener"></a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL = 'https://lcbymyvzhnwcmpdukyqr.supabase.co';
+const SB_KEY = 'sb_publishable_IUgbqJrPeXTe-N1daV5piA_S_IIewvp';
+const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
+
+const qs = new URLSearchParams(location.search);
+const SLUG = (qs.get('w') || location.hash.replace('#','') || '').trim();
+const KEY = 'sala:' + SLUG;
+const $ = id => document.getElementById(id);
+
+let W = null;          // linha do webinar
+let ME = null;         // {id, token, nome, tel, enquete_resposta}
+let playerVid = null;  // id do vídeo já montado
+
+function load(){ try { return JSON.parse(localStorage.getItem(KEY)); } catch(e){ return null; } }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(ME)); } catch(e){} }
+
+function mascara(v){
+  const d = v.replace(/\D/g,'').slice(0,11);
+  if (d.length <= 2) return d ? '(' + d : '';
+  if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+}
+$('tel').addEventListener('input', e => { e.target.value = mascara(e.target.value); });
+
+async function carregarWebinar(){
+  const { data, error } = await sb.from('sala_webinars').select('*').eq('slug', SLUG).maybeSingle();
+  if (error || !data) return null;
+  return data;
+}
+
+function erro(msg){ const e = $('erro'); e.textContent = msg; e.classList.toggle('hide', !msg); }
+
+$('form').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const nome = $('nome').value.trim();
+  const tel = $('tel').value.replace(/\D/g,'');
+  if (nome.length < 2) return erro('Digite seu nome.');
+  if (tel.length < 10) return erro('Digite seu WhatsApp com DDD.');
+  erro(''); $('entrar').disabled = true; $('entrar').textContent = 'Entrando…';
+  const { data, error } = await sb.rpc('sala_entrar', { p_slug: SLUG, p_nome: nome, p_telefone: tel, p_ua: navigator.userAgent });
+  $('entrar').disabled = false; $('entrar').textContent = 'Entrar na sala';
+  if (error) return erro(/telefone/.test(error.message) ? 'Confira o número do WhatsApp.' : 'Não conseguimos te colocar na sala. Tente de novo.');
+  ME = { id: data.id, token: data.token, nome, tel, enquete_resposta: data.enquete_resposta };
+  save(); abrirSala();
+});
+
+function abrirSala(){
+  $('gate').classList.add('hide');
+  $('sala').classList.remove('hide');
+  $('ola').textContent = `Você está na sala como ${ME.nome.split(' ')[0]}.`;
+  render();
+  ping(); setInterval(ping, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
+  ouvir();
+}
+
+async function ping(){
+  if (!ME) return;
+  const { data } = await sb.rpc('sala_ping', { p_id: ME.id, p_token: ME.token });
+  if (data === false) { localStorage.removeItem(KEY); location.reload(); } // registro sumiu: pede de novo
+}
+
+function render(){
+  if (!W) return;
+  document.title = W.titulo + ' · Ao vivo';
+  $('titulo').textContent = W.titulo;
+  const b = $('badge');
+  b.className = 'badge' + (W.status === 'ao_vivo' ? ' live' : '');
+  b.textContent = W.status === 'ao_vivo' ? 'Ao vivo' : W.status === 'encerrado' ? 'Encerrada' : 'Em breve';
+
+  // Player
+  const p = $('player');
+  if (W.status === 'encerrado') {
+    playerVid = null;
+    p.innerHTML = '<div class="espera"><strong>A transmissão terminou</strong><span>Obrigado por estar com a gente.</span></div>';
+  } else if (W.youtube_id && W.status === 'ao_vivo') {
+    if (playerVid !== W.youtube_id) {
+      playerVid = W.youtube_id;
+      p.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(W.youtube_id)}?autoplay=1&rel=0&modestbranding=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="Transmissão ao vivo"></iframe>`;
+    }
+  } else {
+    playerVid = null;
+    p.innerHTML = '<div class="espera"><strong>Começa em instantes</strong><span>Deixe esta página aberta. A transmissão aparece aqui sozinha.</span></div>';
+  }
+
+  // Enquete
+  const respondeu = ME && ME.enquete_resposta !== null && ME.enquete_resposta !== undefined;
+  $('enquete').classList.toggle('hide', !(W.enquete_aberta && !respondeu));
+  $('enqueteOk').classList.toggle('hide', !(W.enquete_aberta && respondeu));
+  if (W.enquete_aberta && !respondeu) {
+    $('pergunta').textContent = W.enquete_pergunta;
+    const box = $('opts'); box.innerHTML = '';
+    (W.enquete_opcoes || []).forEach((txt, i) => {
+      const o = document.createElement('button');
+      o.className = 'opt'; o.type = 'button'; o.textContent = txt;
+      o.onclick = () => responder(i);
+      box.appendChild(o);
+    });
+  }
+
+  // CTA
+  const temCta = W.cta_visivel && W.agenda_url;
+  $('cta').classList.toggle('hide', !temCta);
+  if (temCta) {
+    const u = new URL(W.agenda_url);
+    u.searchParams.set('name', ME.nome);
+    u.searchParams.set('phone', ME.tel);
+    u.searchParams.set('utm_source', 'sala');
+    u.searchParams.set('utm_campaign', SLUG);
+    const a = $('ctaBtn'); a.href = u.toString(); a.textContent = W.cta_texto;
+    a.onclick = () => { sb.rpc('sala_clicou', { p_id: ME.id, p_token: ME.token }); };
+  }
+}
+
+async function responder(i){
+  ME.enquete_resposta = i; save(); render();
+  await sb.rpc('sala_responder', { p_id: ME.id, p_token: ME.token, p_resposta: i });
+}
+
+function ouvir(){
+  sb.channel('sala-' + W.id)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sala_webinars', filter: 'id=eq.' + W.id },
+        payload => { W = payload.new; render(); })
+    .subscribe();
+  // rede de segurança caso o realtime caia
+  setInterval(async () => { const n = await carregarWebinar(); if (n) { W = n; render(); } }, 20000);
+}
+
+(async function init(){
+  if (!SLUG) { document.body.innerHTML = '<div class="wrap" style="padding-top:40vh;text-align:center">Link da sala incompleto.</div>'; return; }
+  W = await carregarWebinar();
+  if (!W) { document.body.innerHTML = '<div class="wrap" style="padding-top:40vh;text-align:center">Sala não encontrada. Confira o link.</div>'; return; }
+  $('gTitulo').textContent = W.titulo;
+  ME = load();
+  if (ME && ME.id && ME.token) abrirSala();
+  else $('gate').classList.remove('hide');
+})();
+</script>
+</body>
+</html>

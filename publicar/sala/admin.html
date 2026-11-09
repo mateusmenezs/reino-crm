@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Painel da Sala · REINO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--vinho:#3B101D;--vinho-escuro:#210C13;--laranja:#FF4D00;--claro:#F5F3ED;--apoio:rgba(245,243,237,.72);--linha:rgba(245,243,237,.16)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--vinho-escuro);color:var(--claro);font-family:Manrope,system-ui,sans-serif;font-size:15px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+.hide{display:none!important}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+h1{font-family:Anton,sans-serif;font-weight:400;text-transform:uppercase;font-size:28px;line-height:1.1}
+h3{font-weight:800;font-size:15px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--apoio)}
+.card{background:var(--vinho);border:1px solid var(--linha);padding:16px;margin-top:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--laranja);color:var(--vinho);border:0;font-weight:800;text-transform:uppercase;letter-spacing:.05em;min-height:44px;padding:0 16px;cursor:pointer;
+clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%)}
+.btn.sec{background:transparent;color:var(--claro);border:1px solid var(--linha);clip-path:none}
+.btn.sec.on{border-color:var(--laranja);color:var(--laranja)}
+.btn.big{min-height:64px;font-size:17px;padding:0 28px}
+.btn:disabled{opacity:.4;cursor:default}
+input,select,textarea{background:var(--vinho-escuro);border:1px solid var(--linha);min-height:42px;padding:8px 10px;width:100%}
+textarea{min-height:90px;resize:vertical}
+label{display:block;font-weight:700;font-size:13px;margin:10px 0 4px}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+@media(max-width:700px){.f2{grid-template-columns:1fr}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpi{background:var(--vinho);border:1px solid var(--linha);padding:14px}
+.kpi b{display:block;font-family:Anton,sans-serif;font-weight:400;font-size:34px;line-height:1.1;color:var(--laranja)}
+.kpi span{font-size:13px;font-weight:700}
+.kpi small{display:block;color:var(--apoio);font-size:12px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab{background:transparent;border:1px solid var(--linha);padding:8px 12px;cursor:pointer;font-weight:700;font-size:13px}
+.tab.on{background:var(--claro);color:var(--vinho);border-color:var(--claro)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--linha);vertical-align:middle}
+th{font-size:12px;color:var(--apoio);text-transform:uppercase;letter-spacing:.05em}
+.tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 6px;border:1px solid var(--laranja);color:var(--laranja);text-transform:uppercase}
+.mini{min-height:32px;padding:0 10px;font-size:12px}
+a{color:var(--laranja)}
+.muted{color:var(--apoio);font-size:13px}
+#curva svg{width:100%;height:180px;display:block}
+.link{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;background:var(--vinho-escuro);padding:8px 10px;border:1px solid var(--linha);flex:1}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--claro);color:var(--vinho);font-weight:800;padding:10px 16px;z-index:9}
+.scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+
+<div id="login" class="wrap hide" style="max-width:380px;padding-top:15vh">
+  <h1>Painel da sala</h1>
+  <p class="muted" style="margin:6px 0 10px">Entre com seu login do Reino CRM.</p>
+  <form id="fLogin">
+    <label>E-mail</label><input id="lEmail" type="email" autocomplete="username" required>
+    <label>Senha</label><input id="lSenha" type="password" autocomplete="current-password" required>
+    <div id="lErro" class="muted" style="color:var(--laranja);margin-top:8px"></div>
+    <button class="btn" style="width:100%;margin-top:14px">Entrar</button>
+  </form>
+</div>
+
+<div id="app" class="wrap hide">
+  <div class="row" style="justify-content:space-between">
+    <h1>Painel da sala</h1>
+    <div class="row">
+      <select id="selW" style="width:auto;min-width:220px"></select>
+      <button class="btn sec" id="bNovo">+ Novo webinar</button>
+      <button class="btn sec" id="bSair">Sair</button>
+    </div>
+  </div>
+
+  <!-- Config -->
+  <div class="card hide" id="cfg">
+    <h3 id="cfgTit">Novo webinar</h3>
+    <div class="f2">
+      <div><label>Título (aparece na sala)</label><input id="cTitulo" placeholder="Claude para High Ticket · Aula ao vivo"></div>
+      <div><label>Código do link (slug)</label><input id="cSlug" placeholder="ic4"></div>
+      <div><label>Link ou ID da live no YouTube (não listada)</label><input id="cYt" placeholder="https://youtube.com/live/XXXX"></div>
+      <div><label>Link da agenda (Cal.com / Calendly)</label><input id="cAgenda" placeholder="https://cal.com/reino/sessao"></div>
+      <div><label>Texto do botão</label><input id="cCta" value="Quero agendar minha sessão"></div>
+      <div><label>Qualificado a partir da opção nº</label><input id="cQual" type="number" min="1" value="2"></div>
+    </div>
+    <label>Pergunta da enquete</label><input id="cPerg" value="Qual o faturamento mensal do seu negócio hoje?">
+    <label>Opções (uma por linha, da menor para a maior)</label>
+    <textarea id="cOpts">Até R$10 mil
+R$10 a 20 mil
+R$20 a 50 mil
+R$50 a 100 mil
+Acima de R$100 mil</textarea>
+    <div class="row" style="margin-top:14px"><button class="btn" id="bSalvar">Salvar</button><button class="btn sec" id="bCancelar">Cancelar</button></div>
+  </div>
+
+  <div id="painel" class="hide">
+    <!-- Link + controles -->
+    <div class="card">
+      <h3>Link da sala (manda no grupo)</h3>
+      <div class="row"><div class="link" id="link"></div><button class="btn sec" id="bCopiar">Copiar</button><button class="btn sec" id="bEditar">Editar</button></div>
+      <h3 style="margin-top:18px">Controle ao vivo</h3>
+      <div class="row">
+        <button class="btn sec" data-st="aguardando">Aguardando</button>
+        <button class="btn sec" data-st="ao_vivo">● Ao vivo</button>
+        <button class="btn sec" data-st="encerrado">Encerrar</button>
+        <span style="width:16px"></span>
+        <button class="btn sec" id="bEnq">Abrir enquete</button>
+        <button class="btn sec" id="bCta">Mostrar botão de agenda</button>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn big" id="bPitch">Começou o pitch</button>
+        <span class="muted" id="pitchInfo"></span>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpis" style="margin-top:14px" id="kpis"></div>
+
+    <div class="card" id="curva"><h3>Pessoas na sala por minuto</h3><div id="curvaSvg" class="muted">Sem dados ainda.</div></div>
+
+    <!-- Segmentos -->
+    <div class="card">
+      <h3>Lista por momento</h3>
+      <div class="tabs" id="tabs"></div>
+      <label>Mensagem para este grupo ({nome} vira o primeiro nome)</label>
+      <textarea id="msg"></textarea>
+      <div class="row" style="margin:10px 0 14px">
+        <button class="btn sec mini" id="bCopTel">Copiar telefones</button>
+        <button class="btn sec mini" id="bCsv">Baixar CSV</button>
+        <span class="muted" id="segInfo"></span>
+      </div>
+      <div class="scroll"><table><thead><tr><th>Nome</th><th>WhatsApp</th><th>Min.</th><th>Faturamento</th><th>Status</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const sb = supabase.createClient('https://lcbymyvzhnwcmpdukyqr.supabase.co', 'sb_publishable_IUgbqJrPeXTe-N1daV5piA_S_IIewvp');
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),1800); }
+
+let WS = [], W = null, P = [], CURVA = [], SEG = 'antes', editando = null, timer = null;
+
+const SEGS = {
+  todos:   { nome:'Todos que entraram', f: p => true,
+             msg:'Oi {nome}, obrigado por ter entrado na aula de hoje!' },
+  antes:   { nome:'Saíram antes do pitch', f: p => !p.viu_pitch,
+             msg:'Oi {nome}! Vi que você entrou na aula mas precisou sair antes do final. Separei o resumo do que mostrei e o convite que fiz pra quem ficou. Posso te mandar?' },
+  semclique:{ nome:'Viram o pitch e não clicaram', f: p => p.viu_pitch && !p.clicou_cta_em && !p.agendou_em,
+             msg:'Oi {nome}, você ficou até o final da aula, então imagino que fez sentido pra você. Ficou alguma dúvida sobre a sessão individual? Te ajudo a escolher um horário.' },
+  clicou:  { nome:'Clicaram e não agendaram', f: p => p.clicou_cta_em && !p.agendou_em,
+             msg:'Oi {nome}! Vi que você abriu a agenda mas não chegou a marcar. Aconteceu alguma coisa? Se quiser, eu mesmo reservo um horário pra você — qual período fica melhor?' },
+  agendou: { nome:'Agendaram', f: p => !!p.agendou_em,
+             msg:'Oi {nome}, sua sessão está confirmada! Pra aproveitar bem, me conta em uma frase: qual o maior desafio do seu comercial hoje?' },
+};
+function msgKey(){ return 'sala-msg:' + SEG; }
+function getMsg(){ try { return localStorage.getItem(msgKey()) || SEGS[SEG].msg; } catch(e){ return SEGS[SEG].msg; } }
+
+// ---------- Auth ----------
+async function boot(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if (!session) { $('login').classList.remove('hide'); $('app').classList.add('hide'); return; }
+  const { data: ok } = await sb.rpc('is_team_member');
+  if (!ok) { $('lErro').textContent = 'Seu usuário não está no time.'; await sb.auth.signOut(); $('login').classList.remove('hide'); return; }
+  $('login').classList.add('hide'); $('app').classList.remove('hide');
+  await carregarLista();
+}
+$('fLogin').onsubmit = async e => {
+  e.preventDefault(); $('lErro').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: $('lEmail').value, password: $('lSenha').value });
+  if (error) { $('lErro').textContent = 'E-mail ou senha incorretos.'; return; }
+  boot();
+};
+$('bSair').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+
+// ---------- Webinars ----------
+async function carregarLista(selId){
+  const { data } = await sb.from('sala_webinars').select('*').order('criado_em', { ascending:false });
+  WS = data || [];
+  $('selW').innerHTML = WS.map(w => `<option value="${w.id}">${esc(w.titulo)} (${esc(w.slug)})</option>`).join('') || '<option value="">Nenhum webinar</option>';
+  const id = selId || localStorage.getItem('sala-admin-w') || (WS[0] && WS[0].id);
+  if (id && WS.find(w => w.id === id)) { $('selW').value = id; selecionar(id); }
+  else if (!WS.length) abrirCfg(null);
+}
+$('selW').onchange = e => selecionar(e.target.value);
+
+function selecionar(id){
+  W = WS.find(w => w.id === id); if (!W) return;
+  localStorage.setItem('sala-admin-w', id);
+  $('cfg').classList.add('hide'); $('painel').classList.remove('hide');
+  renderControles(); atualizar();
+  clearInterval(timer); timer = setInterval(atualizar, 10000);
+}
+
+function ytId(v){
+  v = (v||'').trim(); if (!v) return null;
+  const m = v.match(/(?:youtu\.be\/|v=|\/live\/|\/embed\/|\/shorts\/)([\w-]{11})/);
+  return m ? m[1] : v;
+}
+function abrirCfg(w){
+  editando = w; $('painel').classList.add('hide'); $('cfg').classList.remove('hide');
+  $('cfgTit').textContent = w ? 'Editar webinar' : 'Novo webinar';
+  $('cTitulo').value = w?.titulo || '';
+  $('cSlug').value = w?.slug || ''; $('cSlug').disabled = !!w;
+  $('cYt').value = w?.youtube_id || '';
+  $('cAgenda').value = w?.agenda_url || '';
+  $('cCta').value = w?.cta_texto || 'Quero agendar minha sessão';
+  $('cPerg').value = w?.enquete_pergunta || 'Qual o faturamento mensal do seu negócio hoje?';
+  if (w) $('cOpts').value = (w.enquete_opcoes || []).join('\n');
+  $('cQual').value = (w?.qualifica_a_partir ?? 1) + 1;
+}
+$('bNovo').onclick = () => abrirCfg(null);
+$('bEditar').onclick = () => abrirCfg(W);
+$('bCancelar').onclick = () => { if (W) selecionar(W.id); else $('cfg').classList.add('hide'); };
+$('bSalvar').onclick = async () => {
+  const row = {
+    titulo: $('cTitulo').value.trim(),
+    youtube_id: ytId($('cYt').value),
+    agenda_url: $('cAgenda').value.trim() || null,
+    cta_texto: $('cCta').value.trim() || 'Quero agendar minha sessão',
+    enquete_pergunta: $('cPerg').value.trim(),
+    enquete_opcoes: $('cOpts').value.split('\n').map(s => s.trim()).filter(Boolean),
+    qualifica_a_partir: Math.max(0, (parseInt($('cQual').value) || 1) - 1),
+  };
+  if (!row.titulo) return toast('Coloque um título');
+  if (row.agenda_url && !/^https?:\/\//.test(row.agenda_url)) return toast('O link da agenda precisa começar com https://');
+  let res;
+  if (editando) res = await sb.from('sala_webinars').update(row).eq('id', editando.id).select().single();
+  else {
+    row.slug = $('cSlug').value.trim().toLowerCase().replace(/[^a-z0-9-]/g,'-');
+    if (!row.slug) return toast('Coloque o código do link');
+    res = await sb.from('sala_webinars').insert(row).select().single();
+  }
+  if (res.error) return toast(/duplicate/.test(res.error.message) ? 'Esse código já existe' : 'Erro ao salvar');
+  toast('Salvo'); carregarLista(res.data.id);
+};
+
+function salaUrl(){ return new URL('./?w=' + encodeURIComponent(W.slug), location.href).toString(); }
+$('bCopiar').onclick = () => { navigator.clipboard.writeText(salaUrl()); toast('Link copiado'); };
+
+// ---------- Controles ----------
+async function setW(patch){
+  const { data, error } = await sb.from('sala_webinars').update(patch).eq('id', W.id).select().single();
+  if (error) return toast('Erro: ' + error.message);
+  Object.assign(W, data); renderControles(); atualizar();
+}
+document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+  const st = b.dataset.st;
+  if (st === 'encerrado' && !confirm('Encerrar a transmissão para todos?')) return;
+  const patch = { status: st };
+  if (st === 'ao_vivo' && !W.iniciado_em) patch.iniciado_em = new Date().toISOString();
+  if (st === 'encerrado') patch.encerrado_em = new Date().toISOString();
+  setW(patch);
+});
+$('bEnq').onclick = () => setW({ enquete_aberta: !W.enquete_aberta });
+$('bCta').onclick = () => {
+  if (!W.agenda_url) return toast('Cadastre o link da agenda em Editar');
+  setW({ cta_visivel: !W.cta_visivel });
+};
+$('bPitch').onclick = () => {
+  if (W.pitch_em && !confirm('O pitch já foi marcado. Marcar de novo agora?')) return;
+  if (!W.agenda_url && !confirm('Sem link de agenda cadastrado: o botão não vai aparecer na sala. Marcar mesmo assim?')) return;
+  setW({ pitch_em: new Date().toISOString(), cta_visivel: !!W.agenda_url });
+};
+function hora(t){ return t ? new Date(t).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : ''; }
+function renderControles(){
+  $('link').textContent = salaUrl();
+  document.querySelectorAll('[data-st]').forEach(b => b.classList.toggle('on', b.dataset.st === W.status));
+  $('bEnq').textContent = W.enquete_aberta ? 'Fechar enquete' : 'Abrir enquete';
+  $('bEnq').classList.toggle('on', W.enquete_aberta);
+  $('bCta').textContent = W.cta_visivel ? 'Esconder botão de agenda' : 'Mostrar botão de agenda';
+  $('bCta').classList.toggle('on', W.cta_visivel);
+  $('pitchInfo').textContent = W.pitch_em ? `Pitch marcado às ${hora(W.pitch_em)}. O botão de agenda aparece na sala.` : 'Aperte quando começar a oferta: marca o horário e mostra o botão de agenda.';
+}
+
+// ---------- Dados ----------
+async function atualizar(){
+  if (!W) return;
+  const [a, b, c] = await Promise.all([
+    sb.from('sala_presencas_status').select('*').eq('webinar_id', W.id).order('entrou_em'),
+    sb.rpc('sala_curva', { p_webinar: W.id }),
+    sb.from('sala_webinars').select('*').eq('id', W.id).single(),
+  ]);
+  P = a.data || []; CURVA = b.data || [];
+  if (c.data) { Object.assign(W, c.data); renderControles(); }
+  renderKpis(); renderCurva(); renderSeg();
+}
+
+function pct(a, b){ return b ? Math.round(a * 100 / b) + '%' : '–'; }
+function renderKpis(){
+  const n = P.length;
+  const online = P.filter(p => p.online).length;
+  const pico = CURVA.reduce((m, r) => Math.max(m, r.pessoas), 0);
+  const pitch = P.filter(p => p.viu_pitch).length;
+  const clic = P.filter(p => p.clicou_cta_em).length;
+  const ag = P.filter(p => p.agendou_em).length;
+  const resp = P.filter(p => p.enquete_resposta !== null).length;
+  const qual = P.filter(p => p.qualificado).length;
+  const qualPitch = P.filter(p => p.qualificado && p.viu_pitch).length;
+  const k = (v, t, s) => `<div class="kpi"><b>${v}</b><span>${t}</span><small>${s || '&nbsp;'}</small></div>`;
+  $('kpis').innerHTML =
+    k(n, 'Entraram', 'pessoas únicas') +
+    k(online, 'Online agora', `pico de ${pico}`) +
+    k(W.pitch_em ? pitch : '–', 'Ao vivo no pitch', W.pitch_em ? pct(pitch, n) + ' de quem entrou' : 'pitch não marcado') +
+    k(clic, 'Clicaram na agenda', pct(clic, pitch) + ' de quem viu o pitch') +
+    k(ag, 'Agendaram', pct(ag, pitch) + ' de quem viu o pitch') +
+    k(qual, 'Qualificados', `${resp} responderam · ${qualPitch} viram o pitch`);
+}
+
+function renderCurva(){
+  if (!CURVA.length) { $('curvaSvg').innerHTML = 'Sem dados ainda.'; return; }
+  const W_ = 1000, H = 180, pad = 22;
+  const t0 = new Date(CURVA[0].minuto).getTime(), t1 = new Date(CURVA[CURVA.length - 1].minuto).getTime();
+  const span = Math.max(t1 - t0, 60000);
+  const max = Math.max(...CURVA.map(r => r.pessoas), 1);
+  const x = t => pad + (t - t0) / span * (W_ - pad * 2);
+  const y = v => H - pad - v / max * (H - pad * 2);
+  const pts = CURVA.map(r => `${x(new Date(r.minuto).getTime()).toFixed(1)},${y(r.pessoas).toFixed(1)}`).join(' ');
+  let pitchMark = '';
+  if (W.pitch_em) {
+    const px = x(new Date(W.pitch_em).getTime());
+    pitchMark = `<line x1="${px}" x2="${px}" y1="${pad - 8}" y2="${H - pad}" stroke="#F5F3ED" stroke-dasharray="4 4"/><text x="${px + 6}" y="${pad}" fill="#F5F3ED" font-size="13" font-weight="700">pitch ${hora(W.pitch_em)}</text>`;
+  }
+  $('curvaSvg').innerHTML = `<svg viewBox="0 0 ${W_} ${H}" preserveAspectRatio="none" role="img" aria-label="Pessoas na sala por minuto">
+    <line x1="${pad}" x2="${W_ - pad}" y1="${H - pad}" y2="${H - pad}" stroke="rgba(245,243,237,.16)"/>
+    <polyline points="${pts}" fill="none" stroke="#FF4D00" stroke-width="3" vector-effect="non-scaling-stroke"/>
+    ${pitchMark}
+    <text x="${pad}" y="${H - 4}" fill="rgba(245,243,237,.72)" font-size="12">${hora(CURVA[0].minuto)}</text>
+    <text x="${W_ - pad}" y="${H - 4}" fill="rgba(245,243,237,.72)" font-size="12" text-anchor="end">${hora(CURVA[CURVA.length - 1].minuto)}</text>
+    <text x="${pad}" y="${pad - 6}" fill="rgba(245,243,237,.72)" font-size="12">máx ${max}</text>
+  </svg>`;
+}
+
+function fmtTel(t){ const d = t.slice(2); return d.length === 11 ? `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}` : t; }
+function primeiro(n){ return (n || '').trim().split(/\s+/)[0] || ''; }
+function lista(){ return P.filter(SEGS[SEG].f); }
+
+function renderSeg(){
+  $('tabs').innerHTML = Object.entries(SEGS).map(([k, s]) => `<button class="tab ${k === SEG ? 'on' : ''}" data-k="${k}">${s.nome} (${P.filter(s.f).length})</button>`).join('');
+  $('tabs').querySelectorAll('.tab').forEach(b => b.onclick = () => { SEG = b.dataset.k; $('msg').value = getMsg(); renderSeg(); });
+  if (document.activeElement !== $('msg')) $('msg').value = getMsg();
+  const L = lista();
+  $('segInfo').textContent = !W.pitch_em && SEG !== 'todos' ? 'Pitch ainda não marcado: por enquanto todo mundo conta como "antes do pitch".' : '';
+  const opts = W.enquete_opcoes || [];
+  const msg = $('msg').value;
+  $('tb').innerHTML = L.map(p => {
+    const txt = encodeURIComponent(msg.replaceAll('{nome}', primeiro(p.nome)));
+    const st = [p.online ? '<span class="tag">online</span>' : '', p.viu_pitch ? 'viu pitch' : '', p.clicou_cta_em ? 'clicou' : '', p.agendou_em ? '<b>agendou</b>' : ''].filter(Boolean).join(' · ');
+    return `<tr>
+      <td>${esc(p.nome || '—')}</td>
+      <td>${fmtTel(p.telefone)}</td>
+      <td>${p.minutos}</td>
+      <td>${p.enquete_resposta !== null ? esc(opts[p.enquete_resposta] || '') + (p.qualificado ? ' <span class="tag">qualif.</span>' : '') : '<span class="muted">—</span>'}</td>
+      <td>${st}</td>
+      <td style="white-space:nowrap"><a class="btn mini" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" href="https://wa.me/${p.telefone}?text=${txt}">WhatsApp</a>
+        <button class="btn sec mini" data-ag="${p.id}">${p.agendou_em ? 'Desmarcar' : 'Agendou'}</button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="6" class="muted">Ninguém neste grupo.</td></tr>`;
+  $('tb').querySelectorAll('[data-ag]').forEach(b => b.onclick = async () => {
+    const p = P.find(x => x.id === b.dataset.ag);
+    await sb.from('sala_presencas').update({ agendou_em: p.agendou_em ? null : new Date().toISOString() }).eq('id', p.id);
+    atualizar();
+  });
+}
+$('msg').oninput = e => { try { localStorage.setItem(msgKey(), e.target.value); } catch(_){} };
+$('msg').onchange = () => renderSeg();
+$('bCopTel').onclick = () => { navigator.clipboard.writeText(lista().map(p => p.telefone).join('\n')); toast(lista().length + ' telefones copiados'); };
+$('bCsv').onclick = () => {
+  const opts = W.enquete_opcoes || [];
+  const head = ['nome','telefone','entrou_em','minutos','viu_pitch','clicou','agendou','faturamento','qualificado'];
+  const rows = lista().map(p => [p.nome, p.telefone, p.entrou_em, p.minutos, p.viu_pitch ? 'sim' : 'nao', p.clicou_cta_em ? 'sim' : 'nao', p.agendou_em ? 'sim' : 'nao', p.enquete_resposta !== null ? opts[p.enquete_resposta] : '', p.qualificado ? 'sim' : 'nao']);
+  const csv = [head, ...rows].map(r => r.map(v => `"${String(v ?? '').replaceAll('"','""')}"`).join(';')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' }));
+  a.download = `sala-${W.slug}-${SEG}.csv`; a.click();
+};
+
+boot();
+</script>
+</body>
+</html>
