@@ -6,66 +6,71 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Painel da Sala · REINO</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--vinho:#3B101D;--vinho-escuro:#210C13;--laranja:#FF4D00;--claro:#F5F3ED;--apoio:rgba(245,243,237,.72);--linha:rgba(245,243,237,.16)}
+:root{--bg:#FFFFFF;--sup:#F5F6F8;--borda:#E3E5E9;--texto:#1D1F23;--apoio:#5F6670;--laranja:#D93F00;--laranja-h:#C23800;--laranja-claro:#FFF1EA;--vinho:#3B101D}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--vinho-escuro);color:var(--claro);font-family:Manrope,system-ui,sans-serif;font-size:15px;line-height:1.5}
+body{background:var(--sup);color:var(--texto);font-family:Manrope,system-ui,sans-serif;font-size:15px;line-height:1.5}
 button,input,select,textarea{font:inherit;color:inherit}
 .hide{display:none!important}
 .wrap{max-width:1180px;margin:0 auto;padding:16px}
-h1{font-family:Anton,sans-serif;font-weight:400;text-transform:uppercase;font-size:28px;line-height:1.1}
-h3{font-weight:800;font-size:15px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--apoio)}
-.card{background:var(--vinho);border:1px solid var(--linha);padding:16px;margin-top:14px}
+h1{font-weight:800;font-size:24px;line-height:1.2;letter-spacing:-.01em}
+h3{font-weight:800;font-size:13px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--apoio)}
+.card{background:var(--bg);border:1px solid var(--borda);border-radius:12px;padding:18px;margin-top:14px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.btn{background:var(--laranja);color:var(--vinho);border:0;font-weight:800;text-transform:uppercase;letter-spacing:.05em;min-height:44px;padding:0 16px;cursor:pointer;
-clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%)}
-.btn.sec{background:transparent;color:var(--claro);border:1px solid var(--linha);clip-path:none}
-.btn.sec.on{border-color:var(--laranja);color:var(--laranja)}
-.btn.big{min-height:64px;font-size:17px;padding:0 28px}
+.btn{background:var(--laranja);color:#fff;border:0;border-radius:8px;font-weight:800;min-height:42px;padding:0 16px;cursor:pointer;transition:background .15s}
+.btn:hover{background:var(--laranja-h)}
+.btn.sec{background:var(--bg);color:var(--texto);border:1px solid var(--borda)}
+.btn.sec:hover{background:var(--sup)}
+.btn.sec.on{border-color:var(--laranja);color:var(--laranja);background:var(--laranja-claro)}
+.btn.big{min-height:60px;font-size:17px;padding:0 28px}
 .btn:disabled{opacity:.4;cursor:default}
-input,select,textarea{background:var(--vinho-escuro);border:1px solid var(--linha);min-height:42px;padding:8px 10px;width:100%}
+input,select,textarea{background:var(--bg);border:1px solid var(--borda);border-radius:8px;min-height:42px;padding:8px 12px;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--laranja);box-shadow:0 0 0 3px var(--laranja-claro)}
 textarea{min-height:90px;resize:vertical}
-label{display:block;font-weight:700;font-size:13px;margin:10px 0 4px}
+label{display:block;font-weight:700;font-size:13px;margin:12px 0 4px}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
 @media(max-width:700px){.f2{grid-template-columns:1fr}}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.kpi{background:var(--vinho);border:1px solid var(--linha);padding:14px}
-.kpi b{display:block;font-family:Anton,sans-serif;font-weight:400;font-size:34px;line-height:1.1;color:var(--laranja)}
-.kpi span{font-size:13px;font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi{background:var(--bg);border:1px solid var(--borda);border-radius:12px;padding:16px}
+.kpi b{display:block;font-weight:800;font-size:32px;line-height:1.1;color:var(--texto);letter-spacing:-.02em}
+.kpi span{font-size:13px;font-weight:700;color:var(--texto)}
 .kpi small{display:block;color:var(--apoio);font-size:12px}
+.kpi.dest{border-color:var(--laranja);background:var(--laranja-claro)}
+.kpi.dest b{color:var(--laranja)}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.tab{background:transparent;border:1px solid var(--linha);padding:8px 12px;cursor:pointer;font-weight:700;font-size:13px}
-.tab.on{background:var(--claro);color:var(--vinho);border-color:var(--claro)}
+.tab{background:var(--bg);border:1px solid var(--borda);border-radius:999px;padding:7px 14px;cursor:pointer;font-weight:700;font-size:13px}
+.tab.on{background:var(--texto);color:#fff;border-color:var(--texto)}
 table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--linha);vertical-align:middle}
-th{font-size:12px;color:var(--apoio);text-transform:uppercase;letter-spacing:.05em}
-.tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 6px;border:1px solid var(--laranja);color:var(--laranja);text-transform:uppercase}
-.mini{min-height:32px;padding:0 10px;font-size:12px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--borda);vertical-align:middle}
+th{font-size:12px;color:var(--apoio);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+.tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--laranja-claro);color:var(--laranja)}
+.mini{min-height:32px;padding:0 12px;font-size:12px}
 a{color:var(--laranja)}
 .muted{color:var(--apoio);font-size:13px}
 #curva svg{width:100%;height:180px;display:block}
-.link{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;background:var(--vinho-escuro);padding:8px 10px;border:1px solid var(--linha);flex:1}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--claro);color:var(--vinho);font-weight:800;padding:10px 16px;z-index:9}
+.link{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;background:var(--sup);padding:10px 12px;border:1px solid var(--borda);border-radius:8px;flex:1}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--texto);color:#fff;font-weight:700;padding:10px 16px;border-radius:8px;z-index:9}
 .scroll{overflow-x:auto}
+.logo{width:28px;height:auto}
 </style>
 </head>
 <body>
 
-<div id="login" class="wrap hide" style="max-width:380px;padding-top:15vh">
+<div id="login" class="wrap hide" style="max-width:420px;padding-top:12vh"><div class="card" style="padding:28px">
   <h1>Painel da sala</h1>
   <p class="muted" style="margin:6px 0 10px">Entre com seu login do Reino CRM.</p>
   <form id="fLogin">
     <label>E-mail</label><input id="lEmail" type="email" autocomplete="username" required>
     <label>Senha</label><input id="lSenha" type="password" autocomplete="current-password" required>
-    <div id="lErro" class="muted" style="color:var(--laranja);margin-top:8px"></div>
-    <button class="btn" style="width:100%;margin-top:14px">Entrar</button>
+    <div id="lErro" class="muted" style="color:#B42318;margin-top:8px"></div>
+    <button class="btn" style="width:100%;margin-top:16px">Entrar</button>
   </form>
-</div>
+</div></div>
 
 <div id="app" class="wrap hide">
   <div class="row" style="justify-content:space-between">
-    <h1>Painel da sala</h1>
+    <div class="row"><svg class="logo" viewBox="0 0 88 84" aria-hidden="true"><g fill="#3B101D"><path d="M12 72V12H68V44H44V28H28V72Z"/><path d="M40 48H56L76 72H54L40 56Z"/></g></svg><h1>Painel da sala</h1></div>
     <div class="row">
       <select id="selW" style="width:auto;min-width:220px"></select>
       <button class="btn sec" id="bNovo">+ Novo webinar</button>
@@ -300,13 +305,13 @@ function renderKpis(){
   const resp = P.filter(p => p.enquete_resposta !== null).length;
   const qual = P.filter(p => p.qualificado).length;
   const qualPitch = P.filter(p => p.qualificado && p.viu_pitch).length;
-  const k = (v, t, s) => `<div class="kpi"><b>${v}</b><span>${t}</span><small>${s || '&nbsp;'}</small></div>`;
+  const k = (v, t, s, d) => `<div class="kpi${d ? ' dest' : ''}"><b>${v}</b><span>${t}</span><small>${s || '&nbsp;'}</small></div>`;
   $('kpis').innerHTML =
     k(n, 'Entraram', 'pessoas únicas') +
     k(online, 'Online agora', `pico de ${pico}`) +
     k(W.pitch_em ? pitch : '–', 'Ao vivo no pitch', W.pitch_em ? pct(pitch, n) + ' de quem entrou' : 'pitch não marcado') +
     k(clic, 'Clicaram na agenda', pct(clic, pitch) + ' de quem viu o pitch') +
-    k(ag, 'Agendaram', pct(ag, pitch) + ' de quem viu o pitch') +
+    k(ag, 'Agendaram', pct(ag, pitch) + ' de quem viu o pitch', 1) +
     k(qual, 'Qualificados', `${resp} responderam · ${qualPitch} viram o pitch`);
 }
 
@@ -322,15 +327,15 @@ function renderCurva(){
   let pitchMark = '';
   if (W.pitch_em) {
     const px = x(new Date(W.pitch_em).getTime());
-    pitchMark = `<line x1="${px}" x2="${px}" y1="${pad - 8}" y2="${H - pad}" stroke="#F5F3ED" stroke-dasharray="4 4"/><text x="${px + 6}" y="${pad}" fill="#F5F3ED" font-size="13" font-weight="700">pitch ${hora(W.pitch_em)}</text>`;
+    pitchMark = `<line x1="${px}" x2="${px}" y1="${pad - 8}" y2="${H - pad}" stroke="#1D1F23" stroke-dasharray="4 4"/><text x="${px + 6}" y="${pad}" fill="#1D1F23" font-size="13" font-weight="700">pitch ${hora(W.pitch_em)}</text>`;
   }
   $('curvaSvg').innerHTML = `<svg viewBox="0 0 ${W_} ${H}" preserveAspectRatio="none" role="img" aria-label="Pessoas na sala por minuto">
-    <line x1="${pad}" x2="${W_ - pad}" y1="${H - pad}" y2="${H - pad}" stroke="rgba(245,243,237,.16)"/>
-    <polyline points="${pts}" fill="none" stroke="#FF4D00" stroke-width="3" vector-effect="non-scaling-stroke"/>
+    <line x1="${pad}" x2="${W_ - pad}" y1="${H - pad}" y2="${H - pad}" stroke="#E3E5E9"/>
+    <polyline points="${pts}" fill="none" stroke="#D93F00" stroke-width="3" vector-effect="non-scaling-stroke"/>
     ${pitchMark}
-    <text x="${pad}" y="${H - 4}" fill="rgba(245,243,237,.72)" font-size="12">${hora(CURVA[0].minuto)}</text>
-    <text x="${W_ - pad}" y="${H - 4}" fill="rgba(245,243,237,.72)" font-size="12" text-anchor="end">${hora(CURVA[CURVA.length - 1].minuto)}</text>
-    <text x="${pad}" y="${pad - 6}" fill="rgba(245,243,237,.72)" font-size="12">máx ${max}</text>
+    <text x="${pad}" y="${H - 4}" fill="#5F6670" font-size="12">${hora(CURVA[0].minuto)}</text>
+    <text x="${W_ - pad}" y="${H - 4}" fill="#5F6670" font-size="12" text-anchor="end">${hora(CURVA[CURVA.length - 1].minuto)}</text>
+    <text x="${pad}" y="${pad - 6}" fill="#5F6670" font-size="12">máx ${max}</text>
   </svg>`;
 }
 
