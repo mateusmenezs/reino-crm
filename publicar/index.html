@@ -729,6 +729,41 @@ function JPSwitch({onToast}){
 }
 
 /* ===================== PAINEL DE CONVERSA (reusável: inbox e modal) ===================== */
+/* ===================== IA DO WHATSAPP OFICIAL (config em crm_config) ===================== */
+function IAOficialConfig({onClose,onToast}){
+  const [ativa,setAtiva]=useState(true),[prompt,setPrompt]=useState(""),[modelo,setModelo]=useState("claude-sonnet-5"),[ok,setOk]=useState(false),[busy,setBusy]=useState(false);
+  useEffect(function(){ (async function(){
+    const r=await sb.from("crm_config").select("chave,valor").in("chave",["oficial_ia_ativa","oficial_ia_prompt","oficial_ia_modelo"]);
+    (r.data||[]).forEach(function(x){ if(x.chave==="oficial_ia_ativa")setAtiva(x.valor==="true"); if(x.chave==="oficial_ia_prompt")setPrompt(x.valor||""); if(x.chave==="oficial_ia_modelo")setModelo(x.valor||"claude-sonnet-5"); });
+    setOk(true);
+  })(); },[]);
+  const salvar=async function(){ setBusy(true); const now=new Date().toISOString();
+    const r=await sb.from("crm_config").upsert([{chave:"oficial_ia_ativa",valor:ativa?"true":"false",atualizado_em:now},{chave:"oficial_ia_prompt",valor:prompt,atualizado_em:now},{chave:"oficial_ia_modelo",valor:modelo,atualizado_em:now}],{onConflict:"chave"});
+    setBusy(false); if(r.error) return onToast("Erro ao salvar: "+r.error.message); onToast("IA do Oficial salva ✓"); onClose(); };
+  return h("div",{className:"overlay",onClick:onClose},
+    h("div",{onClick:function(e){e.stopPropagation();},style:{background:"var(--card)",borderRadius:16,width:"100%",maxWidth:760,maxHeight:"90vh",overflowY:"auto",padding:20}},
+      h("h3",{style:{margin:"0 0 4px",fontSize:18}},"🤖 IA do WhatsApp Oficial"),
+      h("div",{style:{fontSize:13,color:"var(--muted)",marginBottom:14}},"Responde sozinha quem chama no número oficial. Quando precisa de alguém, avisa o cliente, desliga a IA naquela conversa e escreve o motivo em \"Próxima ação\". Se alguém do time responder, a IA fica pausada 12h naquela conversa."),
+      !ok?h("div",{className:"center"},h("div",{className:"spin"})):h(Fr,null,
+        h("label",{style:{display:"flex",alignItems:"center",gap:8,fontWeight:700,marginBottom:12,cursor:"pointer"}},
+          h("input",{type:"checkbox",checked:ativa,onChange:function(e){setAtiva(e.target.checked);}}),
+          ativa?"IA ligada pra todas as conversas novas":"IA desligada (ninguém recebe resposta automática)"),
+        h("div",{style:{fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,color:"var(--muted)",marginBottom:6}},"Instruções da IA"),
+        h("textarea",{value:prompt,onChange:function(e){setPrompt(e.target.value);},rows:18,style:{width:"100%",padding:12,border:"1px solid var(--line)",borderRadius:10,fontSize:13.5,lineHeight:1.5,background:"var(--card)",color:"var(--ink)",resize:"vertical",fontFamily:"inherit"}}),
+        h("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:10,flexWrap:"wrap"}},
+          h("span",{style:{fontSize:12.5,color:"var(--muted)"}},"Modelo:"),
+          h("select",{value:modelo,onChange:function(e){setModelo(e.target.value);},style:{padding:"6px 10px",border:"1px solid var(--line)",borderRadius:8,background:"var(--card)",color:"var(--ink)"}},
+            h("option",{value:"claude-sonnet-5"},"Claude Sonnet 5 (recomendado)"),
+            h("option",{value:"claude-haiku-5-5"},"Claude Haiku 5.5 (mais barato)"),
+            h("option",{value:"claude-opus-5-5"},"Claude Opus 5.5 (mais caprichado)")),
+          h("div",{style:{flex:1}}),
+          h("button",{className:"btn ghost",onClick:onClose},"Cancelar"),
+          h("button",{className:"btn gold",onClick:salvar,disabled:busy},busy?"Salvando…":"Salvar"))
+      )
+    )
+  );
+}
+
 function ConversationPane({conv,channel,account,userId,stages,onStageChange,onToast,onOpenFicha,stageField="stage_id"}){
   const [msgs,setMsgs]=useState(null),[text,setText]=useState("");
   const [sugHidden,setSugHidden]=useState(false);
@@ -736,10 +771,14 @@ function ConversationPane({conv,channel,account,userId,stages,onStageChange,onTo
   const [jpOn,setJpOn]=useState(conv.ia_ativa!==false);
   useEffect(()=>{ setJpOn(conv.ia_ativa!==false); },[conv.id,conv.ia_ativa]);
   const toggleJP=async()=>{ const nv=!jpOn; setJpOn(nv);
-    const {error}=await sb.from("conversations").update({ia_ativa:nv}).eq("id",conv.id);
+    const patch=(channel==="oficial"&&nv)?{ia_ativa:true,ia_pausada_ate:null}:{ia_ativa:nv};
+    const {error}=await sb.from("conversations").update(patch).eq("id",conv.id);
     if(error){setJpOn(!nv); onToast&&onToast("Não consegui mudar: "+error.message); return;}
-    onToast&&onToast(nv?"JP ligado nesta conversa 🤖":"JP desligado nesta conversa");
+    const quem=channel==="oficial"?"IA":"JP";
+    onToast&&onToast(nv?quem+" ligado nesta conversa 🤖":quem+" desligado nesta conversa");
   };
+  const iaPausada=channel==="oficial"&&jpOn&&conv.ia_pausada_ate&&new Date(conv.ia_pausada_ate)>new Date();
+  const foraJanela=channel==="oficial"&&(!conv.last_inbound_at||(Date.now()-new Date(conv.last_inbound_at).getTime())>24*3600*1000);
   const endRef=useRef(null);
   const load=useCallback(async()=>{ const {data}=await sb.from("messages").select("*").eq("conversation_id",conv.id).order("created_at"); setMsgs(data||[]);
     if(conv.unread_count>0) sb.from("conversations").update({unread_count:0}).eq("id",conv.id);
@@ -770,6 +809,8 @@ function ConversationPane({conv,channel,account,userId,stages,onStageChange,onTo
         style:{padding:"7px 10px",border:"1px solid var(--line)",borderRadius:8,fontSize:13,fontWeight:600,maxWidth:150,background:"var(--card)"}},
         stages.map(s=>h("option",{key:s.id,value:s.id},s.label||s.name))
       ),
+      channel==="oficial"&&h("button",{className:"btn ghost sm",onClick:toggleJP,title:jpOn?(iaPausada?"A IA está pausada porque o time respondeu. Clique em desligar/ligar pra reativar agora.":"A IA responde esta conversa. Clique pra assumir (desliga a IA)."):"A IA não responde esta conversa. Clique pra devolver pra IA.",
+        style:{marginLeft:8,fontWeight:700,color:jpOn&&!iaPausada?"#047857":"#B91C1C",borderColor:jpOn&&!iaPausada?"#10B981":"#F87171"}},jpOn?(iaPausada?"⏸ IA pausada":"🤖 IA on"):"🙋 Time no controle"),
       channel==="instagram"&&h("button",{className:"btn ghost sm",onClick:toggleJP,title:jpOn?"O JP (SDR IA) pode responder esta conversa. Clique pra desligar.":"O JP não responde esta conversa. Clique pra ligar.",
         style:{marginLeft:8,fontWeight:700,color:jpOn?"#047857":"#B91C1C",borderColor:jpOn?"#10B981":"#F87171"}},jpOn?"🤖 JP on":"⏸ JP off"),
       (channel==="instagram"&&ct.username&&!isNumId(ct.username))&&h("a",{className:"btn ghost sm",style:{marginLeft:8},target:"_blank",href:"https://ig.me/m/"+ct.username,title:"Abrir o direct nessa pessoa"},"💬 Abrir DM"),
@@ -791,7 +832,9 @@ function ConversationPane({conv,channel,account,userId,stages,onStageChange,onTo
       msgs&&msgs.map(m=>h("div",{key:m.id,className:"bubble "+(m.direction==="outbound"?"out":"in")},
         m.text,
         m.attachment_url&&h("div",null,h("a",{href:m.attachment_url,target:"_blank"},"📎 anexo")),
-        h("div",{className:"t"},timeAgo(m.created_at),m.direction==="outbound"&&!m.ig_message_id?" · enviando…":"")
+        h("div",{className:"t"},timeAgo(m.created_at),
+          m.direction==="outbound"&&m.sender_id==="ia"?" · 🤖 IA":"",
+          m.direction==="outbound"&&!m.ig_message_id?((m.raw&&m.raw.erro)?h("span",{style:{color:"#B91C1C",fontWeight:700}}," · ⚠️ não enviado: "+m.raw.erro):" · enviando…"):"")
       )),
       h("div",{ref:endRef})
     ),
@@ -807,6 +850,7 @@ function ConversationPane({conv,channel,account,userId,stages,onStageChange,onTo
         h("button",{className:"btn ghost sm",onClick:async function(){ try{await sb.from("conversations").update({ai_suggestion_status:"descartada"}).eq("id",conv.id);}catch(e){} setSugHidden(true); }},"Descartar")
       )
     ),
+    foraJanela&&h("div",{style:{margin:"0 12px 6px",padding:"8px 12px",borderRadius:10,background:"#FEF3C7",color:"#92400E",fontSize:12.5}},"⏰ Passou de 24h desde a última mensagem do cliente. A Meta só deixa enviar template aprovado até ele responder de novo."),
     h("div",{className:"composer"},
       h("textarea",{rows:"1",placeholder:"Escreva uma resposta...",value:text,onChange:e=>setText(e.target.value),
         onKeyDown:e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}),
@@ -1105,14 +1149,14 @@ function nomesNoQuadro(stages){ var m={}; stagesForPipe(stages,"tudo").forEach(f
 // Pipeline comercial = Instagram + WhatsApp (canal do JP e cards criados na mão contam como WhatsApp).
 // Camilla (low ticket) fica fora.
 const CANAIS_WHATSAPP=["whatsapp","jp","manual"];
-const CANAIS_PIPELINE=["instagram"].concat(CANAIS_WHATSAPP);
+const CANAIS_PIPELINE=["instagram"].concat(CANAIS_WHATSAPP).concat(["oficial"]);
 // Chaves pra reconhecer a mesma pessoa entre canais e tabelas. Espelham crm_fone8()/crm_igkey() do banco
 // (usadas pelo trigger trg_herda_etapa): telefone placeholder e @ "lixo" de formulário não contam.
 const IG_LIXO={"não":1,"nao":1,"naotenho":1,"nãotenho":1,"nenhum":1,"nenhuma":1,"teste":1,"test":1,"sem":1,"semig":1,"seminstagram":1,"naopossuo":1,"nãopossuo":1,"naouso":1,"nãouso":1,"naotem":1,"nãotem":1,"null":1,"none":1,"instagram":1,"nada":1,"xxx":1,"tenho":1};
 const fone8=(s)=>{ var d=onlyDigits(s); if(d.length<8)return ""; var k=d.slice(-8); return (/(\d)\1{5}/.test(k)||k==="12345678"||k==="87654321")?"":k; };
 const igKey=(s)=>{ var k=String(s||"").trim().toLowerCase().replace(/^.*instagram\.com\//,"").replace(/[?#\/].*$/,"").replace(/[@\s]/g,""); return (k.length>2&&!isNumId(k)&&!IG_LIXO[k])?k:""; };
-const CANAL_LABEL={instagram:"📸 Instagram",whatsapp:"💬 WhatsApp",jp:"🤖 JP · WhatsApp",manual:"✍️ Manual",camilla:"🛍️ Low ticket",evento:"🎟️ Evento"};
-const CANAL_ICON={instagram:"📸",whatsapp:"💬",jp:"🤖",manual:"✍️",camilla:"🛍️",evento:"🎟️"};
+const CANAL_LABEL={instagram:"📸 Instagram",whatsapp:"💬 WhatsApp",oficial:"✅ WhatsApp Oficial",jp:"🤖 JP · WhatsApp",manual:"✍️ Manual",camilla:"🛍️ Low ticket",evento:"🎟️ Evento"};
+const CANAL_ICON={instagram:"📸",whatsapp:"💬",oficial:"✅",jp:"🤖",manual:"✍️",camilla:"🛍️",evento:"🎟️"};
 // Quem estava em Nutrição/Perdido e voltou a escrever: o banco cria o card em Novo Lead com retorno=true.
 const retornoTag=(c)=>(c&&c.retorno&&c.kanban_stages&&c.kanban_stages.name==="Novo Lead")
   ? h("span",{className:"tag",title:"Voltou a escrever. Antes estava em "+(c.retorno_de_stage||"Nutrição/Perdido"),style:{background:"#FFF4E5",color:"#B45309",fontWeight:700}},"🔁 retorno"+(c.retorno_de_stage?" · era "+c.retorno_de_stage:""))
@@ -3324,13 +3368,17 @@ function AgendaView({onToast}){
 function lerPref(k,validos,padrao){ try{ var v=localStorage.getItem(k); return validos.indexOf(v)>=0?v:padrao; }catch(e){ return padrao; } }
 function gravarPref(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 function ConversasView({search,account,userId,onToast}){
-  var OPTS=[["todos","Todos"],["instagram","📸 Instagram"],["whatsapp","💬 WhatsApp"]];
+  var OPTS=[["todos","Todos"],["instagram","📸 Instagram"],["whatsapp","💬 WhatsApp"],["oficial","✅ WhatsApp Oficial"]];
+  const [iaCfg,setIaCfg]=useState(false);
   const [canal,setCanal]=useState(function(){ return lerPref("reino_conversas_canal",OPTS.map(function(o){return o[0];}),"todos"); });
   return h(Fr,null,
     h("div",{className:"subtabs"},
       OPTS.map(function(o){ return h("button",{key:o[0],className:"subtab"+(canal===o[0]?" active":""),onClick:function(){ setCanal(o[0]); gravarPref("reino_conversas_canal",o[0]); }},o[1]); }),
-      canal!=="whatsapp"&&h(JPSwitch,{key:"jpsw",onToast:onToast})),
-    h(ChannelView,{key:canal,channel:canal,sub:"inbox",search:search,account:account,userId:userId,onToast:onToast})
+      canal!=="whatsapp"&&canal!=="oficial"&&h(JPSwitch,{key:"jpsw",onToast:onToast}),
+      canal==="oficial"&&h("a",{className:"btn ghost sm",style:{marginLeft:"auto",textDecoration:"none"},href:"atendimento/",target:"_blank"},"💬 Tela de atendimento ↗"),
+      canal==="oficial"&&h("button",{className:"btn ghost sm",onClick:function(){setIaCfg(true);}},"🤖 IA do Oficial")),
+    h(ChannelView,{key:canal,channel:canal,sub:"inbox",search:search,account:account,userId:userId,onToast:onToast}),
+    iaCfg&&h(IAOficialConfig,{onClose:function(){setIaCfg(false);},onToast:onToast})
   );
 }
 
