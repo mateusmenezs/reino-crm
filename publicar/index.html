@@ -3375,7 +3375,8 @@ function ConversasView({search,account,userId,onToast}){
     h("div",{className:"subtabs"},
       OPTS.map(function(o){ return h("button",{key:o[0],className:"subtab"+(canal===o[0]?" active":""),onClick:function(){ setCanal(o[0]); gravarPref("reino_conversas_canal",o[0]); }},o[1]); }),
       canal!=="whatsapp"&&canal!=="oficial"&&h(JPSwitch,{key:"jpsw",onToast:onToast}),
-      canal==="oficial"&&h("button",{className:"btn ghost sm",style:{marginLeft:"auto"},onClick:function(){setIaCfg(true);}},"🤖 IA do Oficial")),
+      canal==="oficial"&&h("a",{className:"btn ghost sm",style:{marginLeft:"auto",textDecoration:"none"},href:"atendimento/",target:"_blank"},"💬 Tela de atendimento ↗"),
+      canal==="oficial"&&h("button",{className:"btn ghost sm",onClick:function(){setIaCfg(true);}},"🤖 IA do Oficial")),
     h(ChannelView,{key:canal,channel:canal,sub:"inbox",search:search,account:account,userId:userId,onToast:onToast}),
     iaCfg&&h(IAOficialConfig,{onClose:function(){setIaCfg(false);},onToast:onToast})
   );
