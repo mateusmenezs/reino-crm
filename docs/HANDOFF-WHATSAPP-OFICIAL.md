@@ -66,6 +66,14 @@ instantânea: no momento em que o webhook mudar, o atendimento já tem que funci
      (`POST /{WABA_ID}/subscribed_apps` com `override_callback_uri` + `verify_token`).
    - Anotar a URL/configuração atual para poder voltar.
 
+   **Descoberto em 09/11:** caixa "REINO API OFICIAL" (+55 11 93623-4418) no Chatwoot foi configurada à mão
+   (mostra "Token de verificação Webhook" + "Chave API") → webhook está no **app da Meta do Mateus**
+   (developers.facebook.com/apps → app do número → WhatsApp → Configuração), campo `messages` assinado.
+   **Para voltar ao Chatwoot (rollback):** Callback URL `https://scarycrocodile-chatwoot.cloudfy.live/webhooks/whatsapp/+5511936234418`
+   + o verify token que aparece no Chatwoot (Caixas de entrada → REINO API OFICIAL → Configuração).
+   `WA_TOKEN` salvo e testado (envio real ok). Prompt JP do evento 10/11 salvo em `crm_config.oficial_ia_prompt`
+   (anterior em `oficial_ia_prompt_backup_v0`).
+
 3. **Troca instantânea, sem buraco.** Recomendado:
    - (a) Antes da troca: `WA_TOKEN` ok, prompt da IA final em `crm_config.oficial_ia_prompt`, time logado em
      `reino-crm.pages.dev/atendimento/`.
@@ -87,6 +95,18 @@ instantânea: no momento em que o webhook mudar, o atendimento já tem que funci
    time responde → chega no celular e a IA pausa 12 h; "quero falar com uma pessoa" → "Time no controle" + motivo
    na próxima ação; disparo de campanha continua marcando `respondeu` em `wa_disparos`. Logs:
    Supabase → Edge Functions → `wa-oficial` → Logs.
+
+## Status em 09/11/2026 (tarde) — NO AR
+- Webhook trocado para `wa-oficial` às 12h47 (verificado pela Meta, `messages` assinado). Atendimento real funcionando
+  (IA responde em ~10 s). Fluxos n8n do Chatwoot (`Jpjc3djuU23HoaNr`, `8KQNUTlncCgcUvNq`, `vbzP5vKZ0QhdJ26r`) já estavam
+  inativos; `nZF8nChDJkUdm0jG` (wa-status) segue ativo mas não recebe mais nada.
+- `wa-oficial` v4: a IA pode ficar calada (`resposta` vazia) e mesmo assim transferir pro time.
+- Travas `contacts_oficial_phone_uk` e `conversations_oficial_contact_uk` (migration `20261109_wa_oficial_trava_duplicados.sql`):
+  antes, mensagens simultâneas de número novo criavam conversas duplicadas (account_id NULL não travava).
+- Testes de aceitação (números falsos 5599000000002–5, conversas arquivadas): rajada de 3 → 1 resposta ✅;
+  "quero falar com uma pessoa" → responde + Time no controle + motivo ✅; Donizeti → calada + passa pro time ✅;
+  envio real IA e time → celular ✅. Falta com celular de fora do time: `respondeu` em `wa_disparos` após disparo.
+- **Prompt atual é do evento de 10/11** — trocar depois do evento.
 
 ## Melhorias que ainda não existem (perguntar antes de fazer)
 - Mídia: hoje áudio/imagem/documento entram só como texto `[🎤 áudio]` etc. (sem baixar o arquivo). Dá para baixar via

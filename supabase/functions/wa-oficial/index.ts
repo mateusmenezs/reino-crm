@@ -177,7 +177,8 @@ const FORMATO = `
 
 FORMATO DA SUA RESPOSTA
 Sempre use a ferramenta "responder". Em "resposta" vai o texto que será enviado ao cliente no WhatsApp.
-Marque "transferir_humano" = true quando precisar de alguém do time, e explique em "motivo".`;
+Se não deve responder, deixe "resposta" vazia ("").
+Marque "transferir_humano" = true quando precisar de alguém do time, e explique em "motivo" (vale mesmo com "resposta" vazia).`;
 
 async function rodarIA(convId: string, msgId: string, fone: string, nome: string | null) {
   if ((await config("oficial_ia_ativa", "true")) !== "true") return;
@@ -239,18 +240,24 @@ async function rodarIA(convId: string, msgId: string, fone: string, nome: string
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { console.error("Anthropic erro", r.status, JSON.stringify(j).slice(0, 500)); return; }
   const out = (j.content || []).find((c: any) => c.type === "tool_use")?.input;
-  if (!out?.resposta) return;
+  if (!out) return;
+  // resposta vazia = a IA decidiu não responder (ex.: resposta automática, spam, contato a ignorar);
+  // mesmo calada, ela ainda pode passar a conversa pro time.
+  const resposta = String(out.resposta ?? "").trim();
+  if (!resposta && !out.transferir_humano) return;
 
   // o time pode ter assumido enquanto a IA pensava
   const { data: c2 } = await sb.from("conversations").select("ia_ativa, ia_pausada_ate").eq("id", convId).single();
   if (c2?.ia_ativa === false || (c2?.ia_pausada_ate && new Date(c2.ia_pausada_ate) > new Date())) return;
 
-  const env = await waEnviarTexto(fone, out.resposta);
-  await sb.from("messages").insert({
-    conversation_id: convId, direction: "outbound", text: out.resposta, sender_id: "ia",
-    ig_message_id: env.ok ? env.wamid : null,
-    raw: env.ok ? { por: "ia" } : { por: "ia", erro: env.erro },
-  });
+  if (resposta) {
+    const env = await waEnviarTexto(fone, resposta);
+    await sb.from("messages").insert({
+      conversation_id: convId, direction: "outbound", text: resposta, sender_id: "ia",
+      ig_message_id: env.ok ? env.wamid : null,
+      raw: env.ok ? { por: "ia" } : { por: "ia", erro: env.erro },
+    });
+  }
 
   if (out.transferir_humano) {
     await sb.from("conversations").update({
