@@ -182,6 +182,17 @@
   .sb-nav .tab.hot .cnt{background:#FF4D00;color:#3B101D}
   .sb-link{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:9px;font-size:13px;font-weight:600;color:var(--sb-muted);text-decoration:none}
   .sb-link:hover{background:rgba(255,255,255,.07);color:var(--sb-text)}
+  /* seletor de número (Oficial | JP) */
+  .numeros{display:flex;gap:4px;padding:3px;margin:0 2px;background:rgba(0,0,0,.22);border-radius:11px}
+  .numeros .num{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px;border-radius:8px;font-size:13px;font-weight:700;color:var(--sb-muted);background:transparent;border:0;cursor:pointer;white-space:nowrap;transition:.12s}
+  .numeros .num:hover{color:var(--sb-text)}
+  .numeros .num.active{background:var(--sb-text);color:var(--sidebar)}
+  .numeros .nl{font-size:10.5px;font-weight:800;background:#FF4D00;color:#3B101D;border-radius:20px;padding:0 6px;line-height:16px}
+  @media(max-width:900px){
+    .numeros{flex-shrink:0;margin:0 4px;background:var(--bg)}
+    .numeros .num{padding:6px 9px;font-size:12px;color:var(--muted)}
+    .numeros .num.active{background:var(--sidebar);color:#F5F3ED}
+  }
   .clist .lhead{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
   .clist .lhead input{flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px;background:var(--bg);color:var(--ink);outline:none}
   .conv .pill{font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 6px;white-space:nowrap}
@@ -235,7 +246,12 @@ const h = React.createElement, Fr = React.Fragment;
 const SUPABASE_URL = "https://lcbymyvzhnwcmpdukyqr.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjYnlteXZ6aG53Y21wZHVreXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMjUzODgsImV4cCI6MjA4OTcwMTM4OH0.27aTgFOM0ZN3MC1s9O9iq19ihxjfuUJ16-gz2FLNsxQ";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const CANAL = "oficial";
+// Números atendidos nesta tela. ia=false: só o time responde (sem botões/filtros de IA nem aviso de 24h).
+const NUMEROS = {
+  oficial: { aba:"✅ Oficial", nome:"WhatsApp Oficial", ia:true,  janela24h:true,  vazio:"Nenhuma conversa ainda. Elas aparecem aqui quando alguém chamar o número oficial." },
+  jp:      { aba:"🤖 JP",      nome:"WhatsApp do JP",   ia:false, janela24h:false, vazio:"Nenhuma conversa ainda. Elas aparecem aqui quando alguém chamar o WhatsApp do JP." },
+};
+const canalSalvo = ()=>{ try{ const c=localStorage.getItem("reino-atend-canal"); return NUMEROS[c]?c:"oficial"; }catch(e){ return "oficial"; } };
 
 /* ---------- utilidades (iguais ao CRM) ---------- */
 const initials = (n)=> (n||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase();
@@ -302,11 +318,11 @@ function IAConfig({onClose,onToast}){
 }
 
 /* ---------- conversa aberta ---------- */
-function Thread({conv,stages,userId,onBack,onToast}){
+function Thread({conv,stages,userId,numero,onBack,onToast}){
   const [msgs,setMsgs]=useState(null),[text,setText]=useState(""),[sending,setSending]=useState(false);
   const endRef=useRef(null);
   const ct=conv.contacts||{};
-  const st=estadoIA(conv);
+  const st=numero.ia?estadoIA(conv):"time";
   const load=useCallback(async()=>{
     const {data}=await sb.from("messages").select("id,direction,text,ig_message_id,sender_id,sent_by,raw,attachment_type,created_at").eq("conversation_id",conv.id).order("created_at").limit(500);
     setMsgs(data||[]);
@@ -340,7 +356,7 @@ function Thread({conv,stages,userId,onBack,onToast}){
           h("option",{value:""},"Sem etapa"), stages.map(s=>h("option",{key:s.id,value:s.id},s.name))),
         st==="ia"&&h("button",{className:"btn ghost sm iabtn on",onClick:()=>setIA("time"),title:"A IA está respondendo. Clique pra assumir."},"🤖 IA atendendo · assumir"),
         st==="pausa"&&h("button",{className:"btn ghost sm iabtn pausa",onClick:()=>setIA("ia"),title:"O time respondeu, a IA está pausada. Clique pra devolver agora."},"⏸ IA pausada · devolver"),
-        st==="time"&&h("button",{className:"btn ghost sm iabtn off",onClick:()=>setIA("ia"),title:"O time está no controle. Clique pra devolver pra IA."},"🙋 Time no controle · devolver"))),
+        numero.ia&&st==="time"&&h("button",{className:"btn ghost sm iabtn off",onClick:()=>setIA("ia"),title:"O time está no controle. Clique pra devolver pra IA."},"🙋 Time no controle · devolver"))),
     conv.next_action&&h("div",{className:"banner info",style:{display:"flex",gap:10,alignItems:"center"}},
       h("div",{style:{flex:1}},h("b",null,"Próxima ação: "),conv.next_action),
       h("button",{className:"btn ghost sm",onClick:limparAcao},"✓ resolvido")),
@@ -350,17 +366,19 @@ function Thread({conv,stages,userId,onBack,onToast}){
       msgs&&msgs.map(m=>{
         const d=dia(m.created_at); const sep=d!==lastDay; lastDay=d;
         const ia=m.direction==="outbound"&&m.sender_id==="ia";
+        const cel=m.direction==="outbound"&&m.sender_id==="celular";
         const erro=m.raw&&m.raw.erro;
         return h(Fr,{key:m.id},
           sep&&h("div",{className:"datesep"},d),
           h("div",{className:"bubble "+(m.direction==="outbound"?"out":"in")+(ia?" ia":"")},
             ia&&h("div",{className:"autor"},"🤖 IA"),
+            cel&&h("div",{className:"autor"},"📱 pelo celular"),
             h("div",{style:{whiteSpace:"pre-wrap"}},m.text),
             h("div",{className:"t"},hora(m.created_at),
               m.direction==="outbound"&&!m.ig_message_id?(erro?h("span",{style:{color:"#DC2626",fontWeight:800,opacity:1}}," · ⚠️ não enviado: "+erro):" · enviando…"):"")));
       }),
       h("div",{ref:endRef})),
-    foraJanela(conv)&&h("div",{className:"banner warn",style:{marginBottom:8}},"⏰ Passou de 24h desde a última mensagem do cliente. A Meta só deixa enviar template aprovado até ele responder de novo."),
+    numero.janela24h&&foraJanela(conv)&&h("div",{className:"banner warn",style:{marginBottom:8}},"⏰ Passou de 24h desde a última mensagem do cliente. A Meta só deixa enviar template aprovado até ele responder de novo."),
     h("div",{className:"composer"},
       h("textarea",{rows:"1",placeholder:st==="ia"?"Escreva pra assumir a conversa (a IA pausa 12h)…":"Escreva uma resposta…",value:text,onChange:e=>setText(e.target.value),
         onKeyDown:e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); } }}),
@@ -369,33 +387,42 @@ function Thread({conv,stages,userId,onBack,onToast}){
 
 /* ---------- app ---------- */
 const FILTROS=[["todas","Todas"],["time","🙋 Precisa do time"],["ia","🤖 IA atendendo"],["naolidas","● Não lidas"]];
+const FILTROS_SEM_IA=[["todas","Todas"],["naolidas","● Não lidas"]];
 function Atendimento({session}){
-  const [convs,setConvs]=useState(null),[stages,setStages]=useState([]),[selId,setSelId]=useState(null);
+  const [canal,setCanalSt]=useState(canalSalvo);
+  const numero=NUMEROS[canal];
+  const [convs,setConvs]=useState(null),[stages,setStages]=useState([]),[selId,setSelId]=useState(null),[naoLidasPor,setNaoLidasPor]=useState({});
   const [filtro,setFiltro]=useState("todas"),[busca,setBusca]=useState(""),[cfg,setCfg]=useState(false),[toast,setToast]=useState(""),[me,setMe]=useState(null);
   const onToast=useCallback(t=>{ setToast(t); setTimeout(()=>setToast(""),2600); },[]);
+  const trocarCanal=(c)=>{ if(c===canal) return; try{ localStorage.setItem("reino-atend-canal",c); }catch(e){}
+    setCanalSt(c); setConvs(null); setSelId(null); setFiltro("todas"); };
   const load=useCallback(async()=>{
-    const {data,error}=await sb.from("conversations").select("*, contacts(*), kanban_stages(name,color)").eq("channel",CANAL).eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}).limit(1000);
+    const {data,error}=await sb.from("conversations").select("*, contacts(*), kanban_stages(name,color)").eq("channel",canal).eq("is_archived",false).order("last_message_at",{ascending:false,nullsFirst:false}).limit(1000);
     if(error){ onToast("Erro: "+error.message); setConvs([]); return; }
     const ids=(data||[]).map(c=>c.id); let ult={};
     if(ids.length){ const r=await sb.from("messages").select("conversation_id,text,direction,sender_id,created_at").in("conversation_id",ids.slice(0,300)).order("created_at",{ascending:false}).limit(1500);
       (r.data||[]).forEach(m=>{ if(!ult[m.conversation_id]) ult[m.conversation_id]=m; }); }
     setConvs((data||[]).map(c=>Object.assign({},c,{_ult:ult[c.id]||null})));
-  },[onToast]);
-  useEffect(()=>{ load(); sb.from("kanban_stages").select("id,name,color").order("position").then(r=>setStages(r.data||[]));
-    sb.from("team_members").select("full_name,email").eq("id",session.user.id).maybeSingle().then(r=>setMe(r.data)); },[load,session.user.id]);
+    // não lidas de cada número, pra avisar no seletor
+    const nl=await sb.from("conversations").select("channel,unread_count").in("channel",Object.keys(NUMEROS)).eq("is_archived",false).gt("unread_count",0);
+    const por={}; (nl.data||[]).forEach(c=>{ por[c.channel]=(por[c.channel]||0)+(c.unread_count||0); }); setNaoLidasPor(por);
+  },[onToast,canal]);
+  useEffect(()=>{ load(); },[load]);
+  useEffect(()=>{ sb.from("kanban_stages").select("id,name,color").order("position").then(r=>setStages(r.data||[]));
+    sb.from("team_members").select("full_name,email").eq("id",session.user.id).maybeSingle().then(r=>setMe(r.data)); },[session.user.id]);
   useEffect(()=>{ let t=null; const deb=()=>{ clearTimeout(t); t=setTimeout(load,400); };
-    const ch=sb.channel("atend-oficial")
-      .on("postgres_changes",{event:"*",schema:"public",table:"conversations",filter:"channel=eq."+CANAL},deb)
+    const ch=sb.channel("atend-"+canal)
+      .on("postgres_changes",{event:"*",schema:"public",table:"conversations",filter:"channel=in.("+Object.keys(NUMEROS).join(",")+")"},deb)
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},deb).subscribe();
-    return ()=>{ clearTimeout(t); sb.removeChannel(ch); }; },[load]);
-  // título da aba com não lidas
-  useEffect(()=>{ const n=(convs||[]).reduce((a,c)=>a+(c.unread_count||0),0); document.title=(n?"("+n+") ":"")+"Atendimento · Reino"; },[convs]);
+    return ()=>{ clearTimeout(t); sb.removeChannel(ch); }; },[load,canal]);
+  // título da aba com não lidas (todos os números)
+  useEffect(()=>{ const n=Object.values(naoLidasPor).reduce((a,b)=>a+b,0); document.title=(n?"("+n+") ":"")+"Atendimento · Reino"; },[naoLidasPor]);
 
   const cont={todas:0,time:0,ia:0,naolidas:0};
   (convs||[]).forEach(c=>{ cont.todas++; const e=estadoIA(c); if(e==="time")cont.time++; if(e!=="time")cont.ia++; if(c.unread_count>0)cont.naolidas++; });
   const q=busca.trim().toLowerCase();
   const lista=(convs||[]).filter(c=>{
-    const e=estadoIA(c);
+    const e=numero.ia?estadoIA(c):"time";
     if(filtro==="time"&&e!=="time") return false;
     if(filtro==="ia"&&e==="time") return false;
     if(filtro==="naolidas"&&!(c.unread_count>0)) return false;
@@ -409,10 +436,14 @@ function Atendimento({session}){
         h("svg",{width:26,height:25,viewBox:"0 0 88 84","aria-hidden":"true",style:{flexShrink:0}},
           h("g",{fill:"var(--sb-text)"},h("path",{d:"M12 72V12H68V44H44V28H28V72Z"}),h("path",{d:"M40 48H56L76 72H54L40 56Z"}))),
         h("span",{className:"nm"},"Reino ",h("b",null,"Atendimento"))),
-      h("div",{className:"sb-label"},"WhatsApp Oficial"),
+      h("div",{className:"sb-label"},"Número"),
+      h("div",{className:"numeros"},
+        Object.keys(NUMEROS).map(k=>h("button",{key:k,className:"num"+(k===canal?" active":""),onClick:()=>trocarCanal(k),title:NUMEROS[k].nome},
+          NUMEROS[k].aba, naoLidasPor[k]>0&&h("span",{className:"nl"},naoLidasPor[k])))),
+      h("div",{className:"sb-label"},numero.nome),
       h("nav",{className:"sb-nav"},
-        FILTROS.map(f=>h("button",{key:f[0],className:"tab"+(filtro===f[0]?" active":"")+(f[0]==="time"&&cont.time>0?" hot":""),onClick:()=>{ setFiltro(f[0]); setSelId(null); }},f[1],h("span",{className:"cnt"},cont[f[0]]))),
-        h("button",{className:"tab",onClick:()=>setCfg(true)},"⚙️ IA do Oficial")),
+        (numero.ia?FILTROS:FILTROS_SEM_IA).map(f=>h("button",{key:f[0],className:"tab"+(filtro===f[0]?" active":"")+(f[0]==="time"&&cont.time>0?" hot":""),onClick:()=>{ setFiltro(f[0]); setSelId(null); }},f[1],h("span",{className:"cnt"},cont[f[0]]))),
+        numero.ia&&h("button",{className:"tab",onClick:()=>setCfg(true)},"⚙️ IA do Oficial")),
       h("div",{className:"sb-label"},"Reino"),
       h("a",{className:"sb-link",href:"../"},"← Voltar ao CRM"),
       h("div",{className:"sb-foot"},
@@ -420,7 +451,7 @@ function Atendimento({session}){
         h("div",{style:{minWidth:0}},h("div",{className:"un"},(me&&me.full_name)||session.user.email),h("div",{className:"us"},"Atendimento")))),
     h("div",{className:"main"},
       h("div",{className:"topbar"},
-        h("div",{className:"crumb"},"Atendimento · WhatsApp Oficial"),
+        h("div",{className:"crumb"},"Atendimento · "+numero.nome),
         h(ThemeToggle,null),
         h("button",{className:"out",onClick:()=>sb.auth.signOut()},"sair")),
       h("div",{className:"inbox"+(sel?" has-sel":"")},
@@ -428,7 +459,7 @@ function Atendimento({session}){
           h("div",{className:"lhead"},h("input",{placeholder:"Buscar nome ou telefone…",value:busca,onChange:e=>setBusca(e.target.value)})),
           h("div",{className:"citems"},
             convs===null&&h("div",{className:"center"},h("div",{className:"spin"})),
-            convs&&lista.length===0&&h("div",{className:"empty"},convs.length?"Nada neste filtro.":"Nenhuma conversa ainda. Elas aparecem aqui quando alguém chamar o número oficial."),
+            convs&&lista.length===0&&h("div",{className:"empty"},convs.length?"Nada neste filtro.":numero.vazio),
             lista.map(c=>{ const ct=c.contacts||{}; const e=estadoIA(c); const u=c._ult;
               return h("div",{key:c.id,className:"conv"+(c.id===selId?" sel":""),onClick:()=>setSelId(c.id)},
                 h("div",{className:"avatar"},initials(nomeDe(ct))),
@@ -436,12 +467,12 @@ function Atendimento({session}){
                   h("div",{className:"top"},h("div",{className:"nm"},nomeDe(ct)),h("div",{className:"tm"},timeAgo(c.last_message_at))),
                   h("div",{className:"pv"},u?((u.direction==="outbound"?(u.sender_id==="ia"?"🤖 ":"Você: "):"")+(u.text||"")):(c.kanban_stages?c.kanban_stages.name:"")),
                   h("div",{style:{display:"flex",gap:6,marginTop:5,alignItems:"center"}},
-                    h("span",{className:"pill "+e},e==="ia"?"🤖 IA":e==="pausa"?"⏸ pausada":"🙋 time"),
+                    numero.ia&&h("span",{className:"pill "+e},e==="ia"?"🤖 IA":e==="pausa"?"⏸ pausada":"🙋 time"),
                     c.kanban_stages&&h("span",{className:"tag"},c.kanban_stages.name),
                     h("div",{style:{flex:1}}),
                     c.unread_count>0&&h("span",{className:"badge"},c.unread_count))));
             }))),
-        sel?h(Thread,{key:sel.id,conv:sel,stages:stages,userId:session.user.id,onBack:()=>setSelId(null),onToast:onToast})
+        sel?h(Thread,{key:sel.id,conv:sel,stages:stages,userId:session.user.id,numero:numero,onBack:()=>setSelId(null),onToast:onToast})
            :h("div",{className:"thread"},h("div",{className:"center"},h("div",null,h("div",{className:"big"},"💬"),"Selecione uma conversa"))))),
     cfg&&h(IAConfig,{onClose:()=>setCfg(false),onToast:onToast}),
     toast&&h("div",{className:"toast"},toast));
