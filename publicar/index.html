@@ -2486,7 +2486,7 @@ function Dashboard({onToast,email}){
   var taxa=totalSales>0?Math.round((vendas/totalSales)*100):0;
   var rFunil=fConvs.reduce(function(a,c){return a+(Number(c.deal_value)||0);},0);
   var parados=fConvs.filter(function(c){var d=daysSince(c.last_inbound_at);return d!=null&&d>=3;}).length;
-  var igN=convs.filter(function(c){return c.channel==="instagram";}).length, waN=convs.filter(function(c){return c.channel==="whatsapp";}).length, evN=leads.length;
+  var igN=convs.filter(function(c){return c.channel==="instagram";}).length, waN=convs.filter(function(c){return CANAIS_WHATSAPP.indexOf(c.channel)>=0;}).length, evN=leads.length;
   var hoje=hojeStr(); var novosHoje=leads.filter(function(l){return (l.criado_em||"").slice(0,10)===hoje;}).length;
   var privNums=null;
   if(isMateus&&priv){ var _ev=priv.events||[];
@@ -2584,7 +2584,7 @@ function Dashboard({onToast,email}){
       vendasList.length===0 ? h("div",{style:{fontSize:14,color:"var(--muted)"}},"Nenhuma venda registrada ainda.")
       : vendasList.map(function(c,i){
           var nm=(c.contacts&&(c.contacts.full_name||c.contacts.username))||"(sem nome)";
-          var ch=c.channel==="instagram"?"📸":c.channel==="whatsapp"?"💬":c.channel==="camilla"?"🛍️":"•";
+          var ch=CANAL_ICON[c.channel]||"•";
           return h("div",{key:c.id||i,style:{display:"flex",alignItems:"center",gap:10,marginBottom:9,flexWrap:"wrap"}},
             h("div",{style:{flex:"1 1 160px",fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}, ch+" "+nm),
             h("div",{style:{width:96,fontSize:12.5,color:"var(--muted)",textAlign:"right"}}, c.deal_value?brl(c.deal_value):"—"),
