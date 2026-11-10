@@ -3140,6 +3140,7 @@ function QuadroView({quadroId,session,onToast,isAdmin,quadros,reloadQuadros}){
   const [view,setView]=useState(quadro.view_padrao||"lista");
   const [edit,setEdit]=useState(null);
   const [cfg,setCfg]=useState(false);
+  const [semAnchor,setSemAnchor]=useState(function(){ return mondayOf(hojeStr()); });
   const RESP=["Mateus","Thiago","Cris","Camilla"];
   const COLS=[["todo","A fazer"],["fazendo","Fazendo"],["feito","Feito"]];
   const load=useCallback(async function(){ var r=await sb.from("tarefas").select("*").eq("quadro_id",quadroId).order("ordem",{ascending:true}).order("criado_em",{ascending:false}); if(r.error){onToast&&onToast("Erro: "+r.error.message);setRows([]);return;} setRows(r.data||[]); },[quadroId]);
@@ -3227,13 +3228,51 @@ function QuadroView({quadroId,session,onToast,isAdmin,quadros,reloadQuadros}){
       )
     );
   }
+  function ymdAddD(ymd,n){ var d=new Date(ymd+"T00:00:00"); d.setDate(d.getDate()+n); var mm=d.getMonth()+1,dd=d.getDate(); return d.getFullYear()+"-"+(mm<10?"0"+mm:mm)+"-"+(dd<10?"0"+dd:dd); }
+  function mondayOf(ymd){ var d=new Date(ymd+"T00:00:00"); var wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd); var mm=d.getMonth()+1,dd=d.getDate(); return d.getFullYear()+"-"+(mm<10?"0"+mm:mm)+"-"+(dd<10?"0"+dd:dd); }
+  var statusSel=function(t){ return h("select",{value:t.status||"todo",onClick:function(ev){ev.stopPropagation();},onChange:function(ev){ev.stopPropagation();mover(t,ev.target.value);},style:{fontSize:11.5,fontWeight:700,padding:"4px 6px",borderRadius:7,border:"1px solid var(--line)",background:"var(--card)",color:(t.status==="feito"?"#16A34A":t.status==="fazendo"?"#D97706":"var(--muted)"),cursor:"pointer"}}, [["todo","Não iniciada"],["fazendo","Em andamento"],["feito","Concluída"]].map(function(o){return h("option",{key:o[0],value:o[0]},o[1]);})); };
+  function statCards(){ var tot=rows.length,nao=0,andg=0,fim=0; rows.forEach(function(t){ var s=t.status||"todo"; if(s==="feito")fim++; else if(s==="fazendo")andg++; else nao++; }); var card=function(lbl,val,cor){ return h("div",{style:{flex:"1 1 120px",background:"var(--card)",border:"1px solid var(--line)",borderRadius:12,padding:"12px 14px"}}, h("div",{style:{fontSize:11,color:"var(--muted)",fontWeight:700,textTransform:"uppercase",letterSpacing:.3}},lbl), h("div",{style:{fontSize:26,fontWeight:800,color:cor||"var(--ink)",marginTop:4}},val)); }; return h("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}, card("Total",tot), card("Não iniciadas",nao,"#6B7280"), card("Em andamento",andg,"#D97706"), card("Concluídas",fim,"#16A34A")); }
+  function semanaView(){
+    var dow=["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"];
+    var dias=[]; for(var i=0;i<7;i++){ dias.push(ymdAddD(semAnchor,i)); }
+    var fimS=ymdAddD(semAnchor,6);
+    var semData=rows.filter(function(t){ return !t.prazo; });
+    var lbl=function(ymd){ var p=ymd.split("-"); return p[2]+"/"+p[1]; };
+    var row=function(t){ var cn=mnome(t);
+      return h("div",{key:t.id,onClick:function(){abrir(t);},style:{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderTop:"1px solid var(--line)",cursor:"pointer"}},
+        h("div",{style:{flex:1,minWidth:0}}, h("div",{style:{fontSize:13.5,fontWeight:600,textDecoration:t.status==="feito"?"line-through":"none",color:t.status==="feito"?"var(--muted)":"var(--ink)"}},t.titulo),
+          h("div",{style:{display:"flex",gap:8,fontSize:11,color:"var(--muted)",marginTop:2,flexWrap:"wrap"}}, t.responsavel&&h("span",null,"👤 "+t.responsavel), cn&&h("span",null,"👥 "+cn), prBadge(t.prioridade), folderBtn(t))),
+        statusSel(t));
+    };
+    var dayBlock=function(ymd,i){ var items=rows.filter(function(t){return t.prazo===ymd;}); var isHoje=ymd===hoje;
+      return h("div",{key:ymd,style:{background:"var(--card)",border:"1px solid "+(isHoje?"var(--gold)":"var(--line)"),borderRadius:12,marginBottom:10,overflow:"hidden"}},
+        h("div",{style:{display:"flex",alignItems:"center",padding:"9px 12px",background:"var(--bg)"}},
+          h("div",{style:{fontSize:12.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,color:isHoje?"var(--gold)":"var(--ink)"}}, dow[i]+" · "+lbl(ymd)+(isHoje?" · hoje":"")),
+          h("div",{style:{marginLeft:"auto",fontSize:11,color:"var(--muted)"}}, items.length+(items.length===1?" tarefa":" tarefas")),
+          h("button",{className:"btn ghost sm",style:{marginLeft:8},onClick:function(ev){ev.stopPropagation(); setEdit({titulo:"",contato:"",responsavel:"",prazo:ymd,prioridade:"media",status:"todo",mentorado_id:"",pasta_url:"",campos:{}}); }},"+ tarefa")),
+        items.length===0&&h("div",{style:{padding:"8px 12px",fontSize:12,color:"var(--muted)"}},"—"),
+        items.map(row));
+    };
+    return h("div",null,
+      statCards(),
+      h("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:12}},
+        h("button",{className:"btn ghost sm",onClick:function(){setSemAnchor(mondayOf(hojeStr()));}},"Hoje"),
+        h("button",{className:"btn ghost sm",onClick:function(){setSemAnchor(ymdAddD(semAnchor,-7));}},"‹"),
+        h("div",{style:{fontSize:13,fontWeight:700}}, "Semana "+lbl(semAnchor)+" – "+lbl(fimS)),
+        h("button",{className:"btn ghost sm",onClick:function(){setSemAnchor(ymdAddD(semAnchor,7));}},"›")),
+      dias.map(dayBlock),
+      semData.length>0&&h("div",{style:{marginTop:4}},
+        h("div",{style:{padding:"4px 2px 8px",fontSize:12.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,color:"var(--muted)"}}, "Sem data ("+semData.length+")"),
+        h("div",{style:{background:"var(--card)",border:"1px dashed var(--line)",borderRadius:12,overflow:"hidden"}}, semData.map(row)))
+    );
+  }
   return h("div",{style:{padding:"18px 16px",maxWidth:1100,margin:"0 auto",width:"100%"}},
     h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}},
       h("h2",{style:{fontSize:20,margin:0}},(quadro.icone||"📋")+" "+(quadro.nome||"Quadro")),
-      h("div",{style:{display:"flex",gap:4,background:"var(--bg)",borderRadius:9,padding:3,marginLeft:8}}, viewBtn("lista","☰ Lista"), viewBtn("kanban","▦ Kanban")),
+      h("div",{style:{display:"flex",gap:4,background:"var(--bg)",borderRadius:9,padding:3,marginLeft:8}}, viewBtn("lista","☰ Lista"), viewBtn("kanban","▦ Kanban"), viewBtn("semana","🗓️ Semana")),
       h("button",{className:"btn ghost sm",style:{marginLeft:"auto"},onClick:function(){setCfg(true);}},"⚙ Campos"),
       h("button",{className:"btn gold",onClick:function(){abrir(null);}},"+ Nova")),
-    view==="kanban"?kanbanView():listaView(),
+    view==="kanban"?kanbanView():view==="semana"?semanaView():listaView(),
     modal(),
     cfg&&h(CamposEditor,{quadroId:quadroId,campos:camposDef,onClose:function(){setCfg(false);},onToast:onToast,reload:reloadQuadros})
   );
