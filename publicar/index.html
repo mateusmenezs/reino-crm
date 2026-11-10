@@ -2648,14 +2648,22 @@ function RotinaCrisView({onToast}){
 }
 
 /* ===================== ONBOARDING (Implementação) ===================== */
+/* ===== Perfil "gestor" (09/11/2026): ve tarefas + jornada dos clientes, sem vendas/valores.
+   Pra ele, os clientes vem da funcao entrega_clientes() (so campos de entrega) e as marcacoes
+   vao pela entrega_marca_conversa(); a tabela conversations fica bloqueada no banco. ===== */
+var _papelP=null;
+try{ sb.auth.onAuthStateChange(function(){ _papelP=null; }); }catch(e){}
+function meuPapel(){ if(!_papelP){ _papelP=sb.auth.getUser().then(function(r){ var u=r&&r.data&&r.data.user; if(!u)return null; return sb.from("team_members").select("role").eq("id",u.id).maybeSingle().then(function(x){ return x.data?x.data.role:null; }); }).catch(function(){ return null; }); } return _papelP; }
+async function convsEntrega(consulta){ if((await meuPapel())==="gestor"){ var r=await sb.rpc("entrega_clientes"); return {data:r.data||[],error:r.error}; } return await consulta(); }
+async function convUpdate(id,patch){ if((await meuPapel())==="gestor"){ return await sb.rpc("entrega_marca_conversa",{p_id:id,p_patch:patch}); } return await sb.from("conversations").update(patch).eq("id",id); }
 function OnboardingView({onToast}){
   const [rows,setRows]=useState(null);
   const [sel,setSel]=useState(null);
   const [drag,setDrag]=useState(null),[over,setOver]=useState(null);
   const [fProd,setFProd]=useState("Todos"),[fTipo,setFTipo]=useState("Todos"); // filtros de produto/tipo (vieram da Entrega 1º mês na fusão)
-  function isMensal(c){ var fp=((c.forma_pagamento||"")+"").toLowerCase(); if(fp.indexOf("boleto")>=0)return true; var pl=c.pgto_plano; if(Array.isArray(pl)&&pl.length>=2){ return pl.filter(function(p){return p&&p.pago!==true;}).length>=1; } return false; }
+  function isMensal(c){ if(typeof c.mensal==="boolean")return c.mensal; var fp=((c.forma_pagamento||"")+"").toLowerCase(); if(fp.indexOf("boleto")>=0)return true; var pl=c.pgto_plano; if(Array.isArray(pl)&&pl.length>=2){ return pl.filter(function(p){return p&&p.pago!==true;}).length>=1; } return false; }
   const load=useCallback(async function(){
-    var r=await sb.from("conversations").select("id,produto,venda_em,form_contrato_enviado_em,form_contrato_ok_em,contrato_enviado_em,contrato_assinado_em,briefing_enviado_em,briefing_ok_em,briefing_respostas,briefing_fup_nivel,impl_plano,diagnostico_texto,diagnostico_etapa,grupo_link,funil,origem,lt_origem,qualificacao,forma_pagamento,pgto_plano,contacts(full_name,phone,email)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false});
+    var r=await convsEntrega(function(){ return sb.from("conversations").select("id,produto,venda_em,form_contrato_enviado_em,form_contrato_ok_em,contrato_enviado_em,contrato_assinado_em,briefing_enviado_em,briefing_ok_em,briefing_respostas,briefing_fup_nivel,impl_plano,diagnostico_texto,diagnostico_etapa,grupo_link,funil,origem,lt_origem,qualificacao,forma_pagamento,pgto_plano,contacts(full_name,phone,email)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false}); });
     var convs=r.data||[]; var ids=convs.map(function(c){return c.id;});
     var mmap={},callmap={},pmap={};
     try{ if(ids.length){
@@ -2707,7 +2715,7 @@ function OnboardingView({onToast}){
       if(passosFeito)ny.passos=(y.passos||[]).map(function(p){return p.feito_em?p:Object.assign({},p,{feito_em:nowv});});
       return ny; }); });
     try{
-      if(Object.keys(convPatch).length)await sb.from("conversations").update(convPatch).eq("id",c.id);
+      if(Object.keys(convPatch).length)await convUpdate(c.id,convPatch);
       for(var k=0;k<callUpds.length;k++){ await sb.from("entrega_calls").update(callUpds[k].body).eq("id",callUpds[k].id); }
       if(passosFeito)await sb.from("plano_acao_passos").update({feito_em:nowv,feito_por:"time"}).eq("conversation_id",c.id).is("feito_em",null);
       onToast&&onToast(((c.contacts&&c.contacts.full_name)||"Cliente")+" → "+destino);
@@ -2769,7 +2777,7 @@ function OnbModal({x,onClose,onToast,reload}){
   var dig=function(s){return String(s||"").replace(/[^0-9]/g,"");};
   var AGCALL="https://scarycrocodile-n8n.cloudfy.live/webhook/agendar-call";
   function copia(u){ try{ navigator.clipboard.writeText(u); onToast&&onToast("Link copiado ✓"); }catch(e){ onToast&&onToast(u); } }
-  async function convMark(patch,msg){ setBusy(true); try{ await sb.from("conversations").update(patch).eq("id",c.id); onToast&&onToast(msg); await reload(); onClose(); }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); } }
+  async function convMark(patch,msg){ setBusy(true); try{ await convUpdate(c.id,patch); onToast&&onToast(msg); await reload(); onClose(); }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); } }
   async function callMark(id,body,msg){ setBusy(true); try{ await sb.from("entrega_calls").update(body).eq("id",id); onToast&&onToast(msg); await reload(); onClose(); }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); } }
   async function passoAdd(){ var t=novoPasso.trim(); if(!t)return; setBusy(true); try{ await sb.from("plano_acao_passos").insert({conversation_id:c.id,texto:t,prazo:novoPrazo||null,criado_por:"time",ordem:((x.passos||[]).length+1)}); onToast&&onToast("Passo adicionado ✓"); await reload(); onClose(); }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); } }
   async function passoToggle(p){ setBusy(true); try{ await sb.from("plano_acao_passos").update(p.feito_em?{feito_em:null,feito_por:null}:{feito_em:now(),feito_por:"time"}).eq("id",p.id); await reload(); onClose(); }catch(e){ onToast&&onToast("Erro: "+(e.message||e)); setBusy(false); } }
@@ -2859,7 +2867,7 @@ function EntregaView({onToast}){
   const [fProd,setFProd]=useState("Todos"),[fTipo,setFTipo]=useState("Todos");
   const COLS=["Call estratégica","Call comercial","Execução do teste","Criação de estrutura","Concluído"];
   const CORES={"Call estratégica":"#3B101D","Call comercial":"#F59E0B","Execução do teste":"#0EA5E9","Criação de estrutura":"#8B5CF6","Concluído":"#059669"};
-  function isMensal(c){ var fp=((c.forma_pagamento||"")+"").toLowerCase(); if(fp.indexOf("boleto")>=0)return true; var pl=c.pgto_plano; if(Array.isArray(pl)&&pl.length>=2){ var pend=pl.filter(function(p){return p&&p.pago!==true;}).length; return pend>=1; } return false; }
+  function isMensal(c){ if(typeof c.mensal==="boolean")return c.mensal; var fp=((c.forma_pagamento||"")+"").toLowerCase(); if(fp.indexOf("boleto")>=0)return true; var pl=c.pgto_plano; if(Array.isArray(pl)&&pl.length>=2){ var pend=pl.filter(function(p){return p&&p.pago!==true;}).length; return pend>=1; } return false; }
   const load=useCallback(async function(){
     var ec=await sb.from("entrega_calls").select("*").order("ordem");
     var calls=ec.data||[]; var byConv={}; calls.forEach(function(x){ (byConv[x.conversation_id]=byConv[x.conversation_id]||[]).push(x); });
@@ -3392,7 +3400,7 @@ function ConversasView({search,account,userId,onToast}){
 function ClientesEntregaView({modo,onToast}){
   const [rows,setRows]=useState(null);
   const load=useCallback(async function(){
-    var r=await sb.from("conversations").select("id,produto,venda_em,briefing_instagram,briefing_nicho,briefing_objetivo,contacts(full_name)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false});
+    var r=await convsEntrega(function(){ return sb.from("conversations").select("id,produto,venda_em,briefing_instagram,briefing_nicho,briefing_objetivo,contacts(full_name)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false}); });
     var convs=r.data||[]; var ids=convs.map(function(c){return c.id;});
     var c2={},igm={};
     try{ if(ids.length){
@@ -3441,8 +3449,9 @@ function ClientesEntregaView({modo,onToast}){
         )
   );
 }
-function ClientesView({search,onToast,isAdmin}){
+function ClientesView({search,onToast,isAdmin,isGestor}){
   var OPTS=[["onboarding","🚀 Onboarding"],["execucao","⚡ Execução"],["jornada","🧭 Jornada"],["trafego","📣 Tráfego"],["cs","💳 CS / Pagamentos"]];
+  if(isGestor) OPTS=OPTS.filter(function(o){ return o[0]!=="trafego"&&o[0]!=="cs"; });
   const [aba,setAba]=useState(function(){ return lerPref("reino_clientes_aba",OPTS.map(function(o){return o[0];}),"onboarding"); });
   return h(Fr,null,
     h("div",{className:"subtabs"},
@@ -3450,8 +3459,8 @@ function ClientesView({search,onToast,isAdmin}){
     aba==="onboarding"&&h(ClientesEntregaView,{key:"onb",modo:"onboarding",onToast:onToast}),
     aba==="execucao"&&h(ClientesEntregaView,{key:"exe",modo:"execucao",onToast:onToast}),
     aba==="jornada"&&h(OnboardingView,{onToast:onToast}),
-    aba==="trafego"&&h(TrafegoView,{onToast:onToast}),
-    aba==="cs"&&h(CSBoard,{search:search,onToast:onToast,isAdmin:isAdmin})
+    !isGestor&&aba==="trafego"&&h(TrafegoView,{onToast:onToast}),
+    !isGestor&&aba==="cs"&&h(CSBoard,{search:search,onToast:onToast,isAdmin:isAdmin})
   );
 }
 
@@ -3479,6 +3488,10 @@ function Shell({session}){
   function criarQuadro(escopo){ setNovoQ({escopo:escopo,nome:escopo==='pessoal'?"Meu quadro":""}); }
   async function salvarNovoQ(){ var nq=novoQ; if(!nq||!nq.nome.trim())return onToast("Dê um nome ao quadro."); var r=await sb.from("quadros").insert([{nome:nq.nome.trim(),escopo:nq.escopo,dono_id:(nq.escopo==='pessoal'?session.user.id:null),criado_por:session.user.id}]).select("id").maybeSingle(); if(r.error)return onToast("Erro: "+r.error.message); setNovoQ(null); await loadQuadros(); if(r.data&&r.data.id) setTab("q:"+r.data.id); }
   const isAdmin = me && me.role==="admin";
+  const isGestor = !!(me && me.role==="gestor");
+  // gestor: so tarefas/quadros e clientes (sem Painel, Pipeline, Conversas, CS, Tráfego)
+  const gestorPode=function(k){ return k==="rotina"||k==="clientes"||(k&&(k.indexOf("q:")===0||k.indexOf("qnew:")===0)); };
+  useEffect(function(){ if(isGestor&&!gestorPode(tab)) setTab("rotina"); },[isGestor,tab]);
   // Lado Comercial enxuto (05/11/2026, Mateus). Fora do menu, mas com a tela ainda no código (pra voltar, recolocar a chave aqui):
   // lowticket, contratos, pesquisa, mentorados. ig/whatsapp_cris viraram "Conversas" + filtro de canal no Pipeline;
   // onboarding/trafego/cs viraram abas de "Clientes".
@@ -3489,14 +3502,15 @@ function Shell({session}){
     ["Meu dia",[["rotinacris","Rotina do dia"],["rotina","Minhas tarefas"]],"gestao"],
     ["Gestão",[["relatorio","Desempenho"],["time","Time"]],"gestao"]
   ];
+  if(isGestor) GROUPS=[["Meu dia",[["rotina","Minhas tarefas"]],"gestao"],["Entrega",[["clientes","Clientes"]],"gestao"]];
   var ADMIN_ONLY={time:1,relatorio:1};
   var byKey={}; GROUPS.forEach(function(g){ g[1].forEach(function(t){ byKey[t[0]]=t; }); });
-  var baseGroups=GROUPS.filter(function(g){return g[2]===ws;}).map(function(g){ return [g[0], g[1].filter(function(t){ return isAdmin || !ADMIN_ONLY[t[0]]; })]; }).filter(function(g){ return g[1].length>0; });
+  var baseGroups=GROUPS.filter(function(g){return isGestor||g[2]===ws;}).map(function(g){ return [g[0], g[1].filter(function(t){ return isAdmin || !ADMIN_ONLY[t[0]]; })]; }).filter(function(g){ return g[1].length>0; });
   var meusQ=(quadros||[]).filter(function(q){return q.escopo==='pessoal';});
   var timeQ=(quadros||[]).filter(function(q){return q.escopo==='time';});
   var qMeus=meusQ.map(function(q){return ["q:"+q.id,(q.icone||'📋')+' '+q.nome];}); qMeus.push(["qnew:pessoal","➕ Meu quadro"]);
   var qTime=timeQ.map(function(q){return ["q:"+q.id,(q.icone||'📋')+' '+q.nome];}); if(isAdmin) qTime.push(["qnew:time","➕ Novo quadro"]);
-  var qGroups=(ws==='gestao')?[["Meus quadros",qMeus],["Quadros do time",qTime]]:[];
+  var qGroups=(isGestor||ws==='gestao')?[["Meus quadros",qMeus],["Quadros do time",qTime]]:[];
   var allGroups=qGroups.concat(baseGroups);
   var curQuadro=(quadros||[]).find(function(q){return "q:"+q.id===tab;});
   const isChannel = tab==="ig"||tab==="whatsapp_cris";
@@ -3508,7 +3522,7 @@ function Shell({session}){
             h("path",{d:"M12 72V12H68V44H44V28H28V72Z"}),
             h("path",{d:"M40 48H56L76 72H54L40 56Z"}))),
         h("span",{className:"nm"},"Reino ",h("b",null,"CRM"))),
-      h("div",{style:{display:"flex",gap:6,padding:"4px 10px 10px"}},
+      !isGestor&&h("div",{style:{display:"flex",gap:6,padding:"4px 10px 10px"}},
         h("button",{className:"tab"+(ws==="comercial"?" active":""),style:{flex:1,textAlign:"center",fontWeight:800},onClick:function(){switchWs("comercial");}},"💼 Comercial"),
         h("button",{className:"tab"+(ws==="gestao"?" active":""),style:{flex:1,textAlign:"center",fontWeight:800},onClick:function(){switchWs("gestao");}},"🏛️ Gestão")),
       h("nav",{className:"sb-nav"},allGroups.map(function(g){ return [
@@ -3519,23 +3533,24 @@ function Shell({session}){
         h("div",{className:"av"},((me&&me.full_name?me.full_name:session.user.email)||"?").slice(0,2).toUpperCase()),
         h("div",{style:{minWidth:0}},
           h("div",{className:"un"},me?me.full_name:session.user.email),
-          h("div",{className:"us"},"Ambiente comercial")))
+          h("div",{className:"us"},isGestor?"Gestão":"Ambiente comercial")))
     ),
     h("div",{className:"main"},
       h("div",{className:"topbar"},
         h("div",{className:"crumb"},byKey[tab]?byKey[tab][1]:(curQuadro?((curQuadro.icone||"📋")+" "+curQuadro.nome):"")),
         h("input",{className:"search",placeholder:"Buscar...",value:search,onChange:e=>setSearch(e.target.value)}),
         h(ThemeToggle,null),
-        h("button",{className:"out",style:{marginRight:4},onClick:()=>setShowStages(true)},"⚙ etapas"),
+        !isGestor&&h("button",{className:"out",style:{marginRight:4},onClick:()=>setShowStages(true)},"⚙ etapas"),
         h("button",{className:"out",onClick:()=>sb.auth.signOut()},"sair")
       ),
+      (!isGestor||gestorPode(tab))&&h(Fr,null,
       isChannel&&h("div",{className:"subtabs"},
         h("button",{className:"subtab"+(sub==="inbox"?" active":""),onClick:()=>setSub("inbox")},"📥 Inbox"),
         h("button",{className:"subtab"+(sub==="pipe"?" active":""),onClick:()=>setSub("pipe")},"📊 Pipeline"),
         tab==="ig"&&h(JPSwitch,{key:"jpsw",onToast:onToast})
       ),
       tab==="conversas"&&h(ConversasView,{search:search,account:account,userId:session.user.id,onToast:onToast}),
-      tab==="clientes"&&h(ClientesView,{search:search,onToast:onToast,isAdmin:isAdmin}),
+      tab==="clientes"&&h(ClientesView,{search:search,onToast:onToast,isAdmin:isAdmin,isGestor:isGestor}),
       tab==="ig"&&h(ChannelView,{channel:"instagram",sub:sub,search:search,account:account,userId:session.user.id,onToast:onToast}),
       tab==="whatsapp_cris"&&h(ChannelView,{channel:"whatsapp",sub:sub,search:search,account:account,userId:session.user.id,onToast:onToast}),
       tab==="evento_presencial"&&h(LeadsBoard,{pipeKey:"evento_presencial",search:search,onToast:onToast}),
@@ -3556,6 +3571,7 @@ function Shell({session}){
       tab==="painel"&&h(Dashboard,{onToast:onToast,email:session.user.email}),
       tab==="time"&&isAdmin&&h(TeamView,{onToast:onToast}),
       tab==="relatorio"&&isAdmin&&h(RelatorioView,{onToast:onToast})
+      )
     ),
     showStages&&h(StagesManager,{onClose:()=>setShowStages(false)}),
     novoQ&&h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:80,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"14vh 16px"},onClick:function(){setNovoQ(null);}},
