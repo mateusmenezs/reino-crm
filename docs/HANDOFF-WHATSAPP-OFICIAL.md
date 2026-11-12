@@ -108,6 +108,21 @@ instantânea: no momento em que o webhook mudar, o atendimento já tem que funci
   envio real IA e time → celular ✅. Falta com celular de fora do time: `respondeu` em `wa_disparos` após disparo.
 - **Prompt atual é do evento de 10/11** — trocar depois do evento.
 
+## Funil "funil-diagnostico-whatsapp" (12/11/2026) — NO AR
+- Toda conversa nova do Oficial entra com `conversations.funil = 'funil-diagnostico-whatsapp'` (+ `anuncio` = referral do
+  click-to-WhatsApp, `origem = 'anuncio'`). Prompt em `crm_config.oficial_ia_prompt` (SPIN → "12 parcelas de R$500…
+  começaria quando?" → agenda). Prompt do evento 10/11 em `oficial_ia_prompt_backup_evento10nov`.
+- A IA tem ferramentas `ver_horarios` / `agendar` (edge `agenda`, Mateus+Thiago revezando). Reserva com
+  `conversation_id` (move esta conversa pra Agendado) e `confirmar_lead:false`, `webhooks:false`.
+- Kanban automático (aba "🎯 Diagnóstico WhatsApp" no Pipeline e em Conversas): Novo Lead · FUP1 nunca respondeu ·
+  FUP2 respondeu · FUP3 quase agendou (recebeu horários) · Agendado · FUP4 no show (closer marca call_status=no_show →
+  gatilho `trg_funil_diag_noshow`) · FUP5 nutrição (fim dos follow-ups ou "sem interesse"). Fases só avançam.
+- Follow-up: `oficial_fup_minutos` = 10,60,360,1380 (o último em 23 h, dentro da janela de 24 h → sem template),
+  só 09h–00h. pg_cron `wa-oficial-fup` (a cada minuto) chama a função só se houver `fup_proximo_em` vencido.
+  Desligar: `crm_config.oficial_fup_ativo = 'false'`. Lead respondeu / time respondeu / agendou → sequência para.
+- Testado com números falsos 5599000000010/11 (arquivados): SPIN → preço → horários reais → FUP3; fup1 → FUP1;
+  fup4 → FUP5; no_show → FUP4. Reserva real NÃO testada (criaria evento no Google) — testar com celular de verdade.
+
 ## Melhorias que ainda não existem (perguntar antes de fazer)
 - Mídia: hoje áudio/imagem/documento entram só como texto `[🎤 áudio]` etc. (sem baixar o arquivo). Dá para baixar via
   `GET /{media_id}` e salvar no Storage; transcrever áudio para a IA.
