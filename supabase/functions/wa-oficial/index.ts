@@ -173,7 +173,8 @@ async function garantirConversa(fone: string, nome: string | null, referral: any
   } else {
     const patch: Record<string, unknown> = {};
     if (conv.is_archived) patch.is_archived = false;
-    if (!conv.funil) patch.funil = funil;
+    // conversa antiga entrando no funil agora: a IA passa a ler só daqui pra frente (não herda assunto velho)
+    if (!conv.funil) { patch.funil = funil; patch.ia_contexto_desde = new Date(Date.now() - 1000).toISOString(); patch.ia_fase = "novo"; }
     if (referral && !conv.anuncio) { patch.anuncio = referral; if (!conv.origem) patch.origem = "anuncio"; }
     if (Object.keys(patch).length) await sb.from("conversations").update(patch).eq("id", conv.id);
   }
@@ -227,7 +228,10 @@ async function processarMensagem(m: any, contatos: any[]) {
     fup_proximo_em: null, fup_n: 0,
     ...(["sem_interesse", "encerrado"].includes(fase?.ia_fase) ? { ia_fase: "respondeu" } : {}),
   }).eq("id", conv.id);
-  const { count } = await sb.from("messages").select("id", { count: "exact", head: true }).eq("conversation_id", conv.id).eq("direction", "inbound");
+  const { data: ctx } = await sb.from("conversations").select("ia_contexto_desde").eq("id", conv.id).single();
+  let qc = sb.from("messages").select("id", { count: "exact", head: true }).eq("conversation_id", conv.id).eq("direction", "inbound");
+  if (ctx?.ia_contexto_desde) qc = qc.gte("created_at", ctx.ia_contexto_desde);
+  const { count } = await qc;
   if ((count ?? 0) >= 2) await moverFase(conv.id, "respondeu");
   return { convId: conv.id as string, contactId, msgId: ins.data.id as string, fone, nome };
 }
@@ -310,8 +314,10 @@ const TOOLS = [
 ];
 
 async function historico(convId: string) {
-  const { data: hist } = await sb.from("messages").select("direction, text, created_at").eq("conversation_id", convId)
-    .order("created_at", { ascending: false }).limit(40);
+  const { data: cv } = await sb.from("conversations").select("ia_contexto_desde").eq("id", convId).single();
+  let q = sb.from("messages").select("direction, text, created_at").eq("conversation_id", convId);
+  if (cv?.ia_contexto_desde) q = q.gte("created_at", cv.ia_contexto_desde);
+  const { data: hist } = await q.order("created_at", { ascending: false }).limit(40);
   const msgs: { role: "user" | "assistant"; content: any }[] = [];
   for (const h of (hist || []).reverse()) {
     const role = h.direction === "inbound" ? "user" : "assistant";

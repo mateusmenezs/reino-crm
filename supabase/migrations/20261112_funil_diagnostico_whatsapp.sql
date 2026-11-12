@@ -44,3 +44,6 @@ select cron.schedule('wa-oficial-fup', '* * * * *', $cron$
     body := '{"acao":"fup"}'::jsonb)
   where exists (select 1 from public.conversations where fup_proximo_em <= now() and channel = 'oficial');
 $cron$);
+
+-- conversa antiga que entra no funil: a IA só lê o histórico a partir daqui (não herda assunto de evento antigo)
+alter table public.conversations add column if not exists ia_contexto_desde timestamptz;
