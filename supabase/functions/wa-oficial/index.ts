@@ -144,6 +144,29 @@ function textoDaMensagem(m: any): { text: string; tipo: string | null } {
   }
 }
 
+// baixa o áudio da Meta e manda pro fluxo de transcrição do n8n (Whisper). Falhou = segue sem texto.
+async function transcreverAudio(mediaId: string, mime?: string): Promise<string> {
+  try {
+    const token = await secret("WA_TOKEN", "wa_oficial_token");
+    const url = await secret("N8N_TRANSCRICAO_URL", "n8n_transcricao_url");
+    if (!token || !url) return "";
+    const meta = await fetch(`${GRAPH}/${mediaId}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+    if (!meta?.url) return "";
+    const bin = await fetch(meta.url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!bin.ok) return "";
+    const tipo = (mime || meta.mime_type || "audio/ogg").split(";")[0];
+    const ext = tipo.includes("mpeg") ? "mp3" : tipo.includes("mp4") || tipo.includes("aac") ? "m4a" : tipo.includes("amr") ? "amr" : "ogg";
+    const fd = new FormData();
+    fd.append("audio", new Blob([await bin.arrayBuffer()], { type: tipo }), `audio.${ext}`);
+    const r = await fetch(url, { method: "POST", body: fd, signal: AbortSignal.timeout(60_000) });
+    const j = await r.json().catch(() => ({}));
+    return String(j?.text || "").trim().slice(0, 3000);
+  } catch (e) {
+    console.error("transcrição falhou", e);
+    return "";
+  }
+}
+
 async function garantirConversa(fone: string, nome: string | null, referral: any) {
   const funil = await config("oficial_funil", "funil-diagnostico-whatsapp");
   // contato do canal oficial (1 por telefone)
@@ -221,6 +244,11 @@ async function processarMensagem(m: any, contatos: any[]) {
   }).select("id").single();
   if (ins.error) return null; // wamid repetido = a Meta reenviou; ignora
   waMarcarLida(m.id);
+  // áudio: transcreve (n8n → Whisper) e grava o texto na mensagem, pra IA e o time lerem
+  if (m.type === "audio" && m.audio?.id) {
+    const t = await transcreverAudio(m.audio.id, m.audio.mime_type);
+    if (t) await sb.from("messages").update({ text: `[🎤 áudio] ${t}` }).eq("id", ins.data.id);
+  }
 
   // lead respondeu: para a sequência de follow-up e reclassifica
   const { data: fase } = await sb.from("conversations").select("ia_fase").eq("id", conv.id).single();
@@ -280,7 +308,12 @@ COMO VOCÊ AGE (ferramentas)
 - agendar: reserva a sessão. Precisa de inicio (exatamente como veio de ver_horarios), nome completo e e-mail.
 - responder: SEMPRE termine com ela. "resposta" é o texto que vai pro cliente no WhatsApp (vazio = não responder).
   "situacao": conversando | preco_apresentado | sem_interesse.
-  "transferir_humano" = true quando precisar de alguém do time (explique em "motivo"; vale mesmo com "resposta" vazia).`;
+  "transferir_humano" = true quando precisar de alguém do time (explique em "motivo"; vale mesmo com "resposta" vazia).
+
+QUANDO PARAR (regra dura)
+- Qualquer retorno negativo encerra a conversa: "foi engano", "cliquei sem querer", "não tenho interesse", "não quero", "agora não", "para de me mandar", "não é pra mim", número errado, xingamento, ou só uma despedida.
+- Nesse caso use situacao "sem_interesse". Responda no máximo UMA despedida curta e educada (ex.: "Sem problema, desculpa o incômodo! 🙏") ou deixe "resposta" vazia. NÃO faça mais pergunta, NÃO insista, NÃO tente reverter.
+- Se a conversa já terminou (você já se despediu), deixe "resposta" vazia.`;
 
 const TOOLS = [
   { name: "ver_horarios", description: "Lista os próximos horários livres da sessão de diagnóstico (1 h, Google Meet).", input_schema: { type: "object", properties: {} } },
@@ -438,7 +471,7 @@ async function rodarIA(convId: string, msgId: string, fone: string, nome: string
   if (!out) { console.error("IA não chegou na resposta final", convId); return; }
 
   const resposta = limparTexto(out.resposta);
-  if (!resposta && !out.transferir_humano) return;
+  if (!resposta && !out.transferir_humano && out.situacao !== "sem_interesse") return;
 
   // o time pode ter assumido enquanto a IA pensava
   const { data: c2 } = await sb.from("conversations").select("ia_ativa, ia_pausada_ate").eq("id", convId).single();
@@ -485,7 +518,8 @@ MODO FOLLOW-UP
 O cliente parou de responder. Este é o follow-up ${n} de ${total}.
 Escreva UMA mensagem curta (1 ou 2 frases), natural, retomando exatamente de onde a conversa parou — sem repetir o que já disse, sem pressão e sem "só passando pra lembrar".
 ${n === 1 ? "Retome a última pergunta de um jeito leve." : ""}${n === 2 ? "Traga um motivo concreto pra continuar, ligado ao que ele contou." : ""}${n === 3 ? "Pergunte se ainda faz sentido conversar agora ou se prefere em outro momento." : ""}${n >= total ? "É a última: deixe a porta aberta com carinho e diga que fica à disposição." : ""}
-Se a conversa estava em horários, ofereça de novo (use ver_horarios). Não use agendar neste modo. Termine com responder.`;
+Se a conversa estava em horários, ofereça de novo (use ver_horarios). Não use agendar neste modo. Termine com responder.
+ANTES DE ESCREVER: se o cliente deu qualquer retorno negativo (engano, sem interesse, agora não, pediu pra parar), se despediu, ou se você já se despediu, NÃO mande nada: "resposta" vazia e situacao "sem_interesse".`;
 
 async function processarFups() {
   const { data: vencidos } = await sb.from("conversations")
@@ -528,7 +562,12 @@ async function processarFups() {
         msgs.push({ role: "assistant", content: j.content }, { role: "user", content: res });
       }
       const texto = limparTexto(out?.resposta);
-      if (!texto) continue;
+      // retorno negativo / conversa encerrada: não manda nada e tira da sequência
+      if (out?.situacao === "sem_interesse" || !texto) {
+        await sb.from("conversations").update({ fup_proximo_em: null, ia_fase: out?.situacao === "sem_interesse" ? "sem_interesse" : "encerrado" }).eq("id", c.id);
+        await moverFase(c.id, "nutricao");
+        continue;
+      }
       const env = await waEnviarTexto(fone, texto);
       await sb.from("messages").insert({
         conversation_id: c.id, direction: "outbound", text: texto, sender_id: "ia",

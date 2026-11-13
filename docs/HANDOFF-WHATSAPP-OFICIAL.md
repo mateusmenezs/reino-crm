@@ -137,3 +137,7 @@ instantânea: no momento em que o webhook mudar, o atendimento já tem que funci
 - Não apagar dados nem desativar fluxos do n8n sem o Mateus confirmar.
 - Mudanças de banco: preferir `create or replace` / `if not exists`; registrar o SQL em `supabase/migrations/`.
 - Front: editar `publicar/` (é o que vai pro ar); push na `main` publica sozinho.
+
+## 13/11/2026 — encerrar no "não" + áudio transcrito (wa-oficial v8)
+- **Retorno negativo encerra**: "foi engano", "sem interesse", "agora não", pediu pra parar, despedida → `ia_fase = sem_interesse`, sem follow-up, card em FUP5. No modo follow-up a IA checa antes e, se a conversa já acabou, não manda nada (resposta vazia → encerra). Motivo: a Val disse "foi engano" e recebeu 3 follow-ups.
+- **Áudio**: a edge baixa a mídia da Meta e manda (multipart, campo `audio`) pro n8n `jItZ0y3V0xSMJpwU` "WA Oficial — Transcrever áudio (Whisper)", credencial OpenAI do n8n. URL do webhook em `app_secrets.n8n_transcricao_url`. O texto vira `[🎤 áudio] <transcrição>` na mensagem (IA e time leem). Falhou/áudio mudo = fica `[🎤 áudio]` e a IA pede em texto.
