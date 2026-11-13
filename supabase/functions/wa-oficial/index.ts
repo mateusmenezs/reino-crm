@@ -415,7 +415,10 @@ async function agendarFup(convId: string, n: number) {
   const base = new Date(c.last_inbound_at).getTime();
   const limite = base + 24 * H - 15 * MIN;
   for (let k = n; k <= offs.length; k++) {
-    const quando = ajustarHorario(base + offs[k - 1] * MIN, limite);
+    // nunca empilha: entre um follow-up e o próximo fica pelo menos o intervalo original
+    // (ex.: lead escreve 23h56 → 10min, 1h e 6h caem fora do horário; antes saíam 09h00, 09h01, 09h02)
+    const gap = k > 1 ? (offs[k - 1] - offs[k - 2]) * MIN : 0;
+    const quando = ajustarHorario(Math.max(base + offs[k - 1] * MIN, Date.now() + gap), limite);
     if (quando) {
       await sb.from("conversations").update({ fup_n: k - 1, fup_proximo_em: new Date(quando).toISOString() }).eq("id", convId);
       return;
@@ -517,6 +520,7 @@ const MODO_FUP = (n: number, total: number) => `
 MODO FOLLOW-UP
 O cliente parou de responder. Este é o follow-up ${n} de ${total}.
 Escreva UMA mensagem curta (1 ou 2 frases), natural, retomando exatamente de onde a conversa parou — sem repetir o que já disse, sem pressão e sem "só passando pra lembrar".
+NÃO cumprimente de novo nem se apresente de novo ("Oi, tudo bem? Aqui é o JP…" já foi dito). Não copie nenhuma mensagem anterior: cada follow-up tem que ser visivelmente diferente das suas mensagens anteriores.
 ${n === 1 ? "Retome a última pergunta de um jeito leve." : ""}${n === 2 ? "Traga um motivo concreto pra continuar, ligado ao que ele contou." : ""}${n === 3 ? "Pergunte se ainda faz sentido conversar agora ou se prefere em outro momento." : ""}${n >= total ? "É a última: deixe a porta aberta com carinho e diga que fica à disposição." : ""}
 Se a conversa estava em horários, ofereça de novo (use ver_horarios). Não use agendar neste modo. Termine com responder.
 ANTES DE ESCREVER: se o cliente deu qualquer retorno negativo (engano, sem interesse, agora não, pediu pra parar), se despediu, ou se você já se despediu, NÃO mande nada: "resposta" vazia e situacao "sem_interesse".`;
