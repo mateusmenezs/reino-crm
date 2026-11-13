@@ -515,13 +515,21 @@ async function rodarIA(convId: string, msgId: string, fone: string, nome: string
 }
 
 // ---------------------------------------------------------------- follow-up (pg_cron a cada minuto)
+// cada follow-up tem um ÂNGULO próprio (nada de repetir a mesma pergunta 4 vezes)
+const ANGULO_FUP: Record<number, string> = {
+  1: `ÂNGULO 1 — PERGUNTA FÁCIL. Troque a pergunta aberta por uma de resposta rápida, de um toque (ex.: se perguntou "o que você faz?", agora pergunte "é mais serviço, produto ou mentoria/consultoria?"; se estava no preço, "o que pesou mais: valor ou momento?"). Uma linha só.`,
+  2: `ÂNGULO 2 — CURIOSIDADE/VALOR. Não pergunte de novo o que já perguntou. Conte em 1 frase o que a pessoa ganha na sessão de diagnóstico (sair com o mapa do que trava as vendas dela e o próximo passo), ligado ao que ela contou ou ao anúncio, e feche com uma pergunta simples. Sem números, casos ou promessas que não estejam no seu prompt.`,
+  3: `ÂNGULO 3 — PERMISSÃO/TIMING. Tire a pressão: pergunte se faz sentido agora ou se prefere que você chame em outro momento. Curto e humano.`,
+  4: `ÂNGULO 4 — ÚLTIMA MENSAGEM. Avise com leveza que é a última, que não vai mais incomodar, e deixe a porta aberta ("se quiser retomar, é só me chamar aqui"). Sem pergunta.`,
+};
 const MODO_FUP = (n: number, total: number) => `
 
 MODO FOLLOW-UP
 O cliente parou de responder. Este é o follow-up ${n} de ${total}.
-Escreva UMA mensagem curta (1 ou 2 frases), natural, retomando exatamente de onde a conversa parou — sem repetir o que já disse, sem pressão e sem "só passando pra lembrar".
-NÃO cumprimente de novo nem se apresente de novo ("Oi, tudo bem? Aqui é o JP…" já foi dito). Não copie nenhuma mensagem anterior: cada follow-up tem que ser visivelmente diferente das suas mensagens anteriores.
-${n === 1 ? "Retome a última pergunta de um jeito leve." : ""}${n === 2 ? "Traga um motivo concreto pra continuar, ligado ao que ele contou." : ""}${n === 3 ? "Pergunte se ainda faz sentido conversar agora ou se prefere em outro momento." : ""}${n >= total ? "É a última: deixe a porta aberta com carinho e diga que fica à disposição." : ""}
+Escreva UMA mensagem curta (1 ou 2 frases), natural, sem pressão e sem "só passando pra lembrar".
+NÃO cumprimente de novo nem se apresente de novo ("Oi, tudo bem? Aqui é o JP…" já foi dito). Não comece com "Oi, {nome}!".
+Leia as suas mensagens anteriores: a nova tem que ter outro ângulo, outra abertura e outra pergunta. Se ficar parecida com alguma anterior, reescreva.
+${ANGULO_FUP[n >= total ? 4 : Math.min(n, 3)]}
 Se a conversa estava em horários, ofereça de novo (use ver_horarios). Não use agendar neste modo. Termine com responder.
 ANTES DE ESCREVER: se o cliente deu qualquer retorno negativo (engano, sem interesse, agora não, pediu pra parar), se despediu, ou se você já se despediu, NÃO mande nada: "resposta" vazia e situacao "sem_interesse".`;
 
