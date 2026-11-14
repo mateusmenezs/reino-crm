@@ -317,6 +317,50 @@ function IAConfig({onClose,onToast}){
           h("button",{className:"btn gold",onClick:salvar,disabled:busy},busy?"Salvando…":"Salvar")))));
 }
 
+/* ---------- relatório por anúncio (click-to-WhatsApp) ---------- */
+const PERIODOS=[["7","7 dias"],["30","30 dias"],["0","Tudo"]];
+function Anuncios({onClose}){
+  const [rows,setRows]=useState(null),[per,setPer]=useState("7"),[err,setErr]=useState(""),[aberto,setAberto]=useState(null);
+  useEffect(()=>{ (async()=>{ setRows(null); setErr("");
+    let q=sb.from("vw_whatsapp_anuncio_leads").select("*").order("primeira_msg_em",{ascending:false}).limit(5000);
+    if(per!=="0") q=q.gte("primeira_msg_em",new Date(Date.now()-Number(per)*86400000).toISOString());
+    const r=await q; if(r.error){ setErr(r.error.message); setRows([]); return; } setRows(r.data||[]); })(); },[per]);
+  const grupos=useMemo(()=>{ const g={};
+    (rows||[]).forEach(x=>{ const k=x.ad_id||x.origem; const a=g[k]||(g[k]={k,nome:x.anuncio_nome||(x.ad_id?("Anúncio "+x.ad_id):x.origem==="organico"?"🌱 Orgânico (sem anúncio)":"Anúncio sem ID"),conjunto:x.conjunto_nome,campanha:x.campanha_nome,headline:x.anuncio_headline,conv:0,preco:0,ag:0,ev:0,leads:[]});
+      a.nome=x.anuncio_nome||a.nome; a.conjunto=a.conjunto||x.conjunto_nome; a.campanha=a.campanha||x.campanha_nome; a.headline=a.headline||x.anuncio_headline;
+      a.conv++; if(x.preco_aceito_em)a.preco++; if(x.reservou_em)a.ag++; if(x.capi_agendou==="enviado")a.ev++; a.leads.push(x); });
+    return Object.values(g).sort((a,b)=>(b.ag-a.ag)||(b.conv-a.conv)); },[rows]);
+  const tot=grupos.reduce((t,a)=>({conv:t.conv+a.conv,preco:t.preco+a.preco,ag:t.ag+a.ag}),{conv:0,preco:0,ag:0});
+  const pct=(a,b)=>b?(Math.round(1000*a/b)/10).toString().replace(".",",")+"%":"–";
+  const th={textAlign:"left",fontSize:11.5,color:"var(--muted)",fontWeight:700,padding:"6px 8px",borderBottom:"1px solid var(--line)"};
+  const td={padding:"8px",fontSize:13,borderBottom:"1px solid var(--line)",verticalAlign:"top"};
+  const num=Object.assign({},td,{textAlign:"right",fontVariantNumeric:"tabular-nums"});
+  return h("div",{className:"overlay",onClick:onClose},
+    h("div",{className:"modal",style:{maxWidth:960},onClick:e=>e.stopPropagation()},
+      h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:6}},
+        h("h3",{style:{margin:0,flex:1}},"📊 Anúncios → conversas → agendamentos"),
+        PERIODOS.map(p=>h("button",{key:p[0],className:"subtab"+(per===p[0]?" active":""),onClick:()=>setPer(p[0])},p[1]))),
+      h("p",{style:{fontSize:12.5,color:"var(--muted)",margin:"0 0 12px",lineHeight:1.5}},"Conta pela 1ª mensagem do lead no Oficial. \"Aceitou preço\" = a IA marcou que o lead topou o valor (vai pra Meta como LeadSubmitted). \"Agendou\" = reserva na Agenda Reino (vai pra Meta como QualifiedLead)."),
+      err&&h("div",{style:{marginBottom:10,color:"#DC2626",fontSize:13}},"Erro: "+err),
+      rows===null?h("div",{className:"center"},h("div",{className:"spin"})):
+      h("div",{style:{overflowX:"auto"}},h("table",{style:{width:"100%",borderCollapse:"collapse"}},
+        h("thead",null,h("tr",null,h("th",{style:th},"Anúncio"),h("th",{style:Object.assign({},th,{textAlign:"right"})},"Conversas"),h("th",{style:Object.assign({},th,{textAlign:"right"})},"Aceitou preço"),h("th",{style:Object.assign({},th,{textAlign:"right"})},"Agendou"),h("th",{style:Object.assign({},th,{textAlign:"right"})},"Taxa"),h("th",{style:Object.assign({},th,{textAlign:"right"})},"Evento na Meta"))),
+        h("tbody",null,
+          grupos.length===0&&h("tr",null,h("td",{style:td,colSpan:6},"Nenhuma conversa nesse período.")),
+          grupos.map(a=>h(Fr,{key:a.k},
+            h("tr",{style:{cursor:"pointer"},onClick:()=>setAberto(aberto===a.k?null:a.k)},
+              h("td",{style:td},h("div",{style:{fontWeight:700}},(aberto===a.k?"▾ ":"▸ ")+a.nome),
+                (a.conjunto||a.campanha)&&h("div",{style:{fontSize:11.5,color:"var(--muted)"}},[a.campanha,a.conjunto].filter(Boolean).join(" · ")),
+                a.headline&&h("div",{style:{fontSize:11.5,color:"var(--muted)",fontStyle:"italic"}},"“"+a.headline+"”")),
+              h("td",{style:num},a.conv),h("td",{style:num},a.preco),h("td",{style:num},h("b",null,a.ag)),h("td",{style:num},pct(a.ag,a.conv)),h("td",{style:num},a.k==="organico"?"–":a.ev)),
+            aberto===a.k&&a.leads.map(l=>h("tr",{key:l.conversation_id,style:{background:"var(--bg)"}},
+              h("td",{style:Object.assign({},td,{paddingLeft:26})},nomeDe({full_name:l.lead,phone:l.phone}),h("span",{style:{fontSize:11.5,color:"var(--muted)"}}," · "+new Date(l.primeira_msg_em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}))),
+              h("td",{style:num},l.ia_fase||""),h("td",{style:num},l.preco_aceito_em?"✓":""),h("td",{style:num},l.reservou_em?"✓":""),h("td",{style:num},""),
+              h("td",{style:num},[l.capi_lead&&("Lead: "+l.capi_lead),l.capi_agendou&&("Agend.: "+l.capi_agendou)].filter(Boolean).join(" · ")||(l.tem_clid?"":"sem clid"))))))),
+        grupos.length>0&&h("tfoot",null,h("tr",null,h("td",{style:Object.assign({},td,{fontWeight:800})},"Total"),h("td",{style:num},tot.conv),h("td",{style:num},tot.preco),h("td",{style:num},h("b",null,tot.ag)),h("td",{style:num},pct(tot.ag,tot.conv)),h("td",{style:num},""))))),
+      h("div",{className:"modal-acts"},h("button",{className:"btn ghost",onClick:onClose},"Fechar"))));
+}
+
 /* ---------- conversa aberta ---------- */
 function Thread({conv,stages,userId,numero,onBack,onToast}){
   const [msgs,setMsgs]=useState(null),[text,setText]=useState(""),[sending,setSending]=useState(false);
@@ -392,7 +436,7 @@ function Atendimento({session}){
   const [canal,setCanalSt]=useState(canalSalvo);
   const numero=NUMEROS[canal];
   const [convs,setConvs]=useState(null),[stages,setStages]=useState([]),[selId,setSelId]=useState(null),[naoLidasPor,setNaoLidasPor]=useState({});
-  const [filtro,setFiltro]=useState("todas"),[busca,setBusca]=useState(""),[cfg,setCfg]=useState(false),[toast,setToast]=useState(""),[me,setMe]=useState(null);
+  const [filtro,setFiltro]=useState("todas"),[busca,setBusca]=useState(""),[cfg,setCfg]=useState(false),[ads,setAds]=useState(false),[toast,setToast]=useState(""),[me,setMe]=useState(null);
   const onToast=useCallback(t=>{ setToast(t); setTimeout(()=>setToast(""),2600); },[]);
   const trocarCanal=(c)=>{ if(c===canal) return; try{ localStorage.setItem("reino-atend-canal",c); }catch(e){}
     setCanalSt(c); setConvs(null); setSelId(null); setFiltro("todas"); };
@@ -443,7 +487,8 @@ function Atendimento({session}){
       h("div",{className:"sb-label"},numero.nome),
       h("nav",{className:"sb-nav"},
         (numero.ia?FILTROS:FILTROS_SEM_IA).map(f=>h("button",{key:f[0],className:"tab"+(filtro===f[0]?" active":"")+(f[0]==="time"&&cont.time>0?" hot":""),onClick:()=>{ setFiltro(f[0]); setSelId(null); }},f[1],h("span",{className:"cnt"},cont[f[0]]))),
-        numero.ia&&h("button",{className:"tab",onClick:()=>setCfg(true)},"⚙️ IA do Oficial")),
+        numero.ia&&h("button",{className:"tab",onClick:()=>setCfg(true)},"⚙️ IA do Oficial"),
+        canal==="oficial"&&h("button",{className:"tab",onClick:()=>setAds(true)},"📊 Anúncios")),
       h("div",{className:"sb-label"},"Reino"),
       h("a",{className:"sb-link",href:"../"},"← Voltar ao CRM"),
       h("div",{className:"sb-foot"},
@@ -469,12 +514,14 @@ function Atendimento({session}){
                   h("div",{style:{display:"flex",gap:6,marginTop:5,alignItems:"center"}},
                     numero.ia&&h("span",{className:"pill "+e},e==="ia"?"🤖 IA":e==="pausa"?"⏸ pausada":"🙋 time"),
                     c.kanban_stages&&h("span",{className:"tag"},c.kanban_stages.name),
+                    canal==="oficial"&&(c.anuncio_nome||c.ad_id)&&h("span",{className:"tag",title:[c.campanha_nome,c.conjunto_nome,c.anuncio_headline].filter(Boolean).join(" · ")},"📢 "+(c.anuncio_nome||"anúncio")),
                     h("div",{style:{flex:1}}),
                     c.unread_count>0&&h("span",{className:"badge"},c.unread_count))));
             }))),
         sel?h(Thread,{key:sel.id,conv:sel,stages:stages,userId:session.user.id,numero:numero,onBack:()=>setSelId(null),onToast:onToast})
            :h("div",{className:"thread"},h("div",{className:"center"},h("div",null,h("div",{className:"big"},"💬"),"Selecione uma conversa"))))),
     cfg&&h(IAConfig,{onClose:()=>setCfg(false),onToast:onToast}),
+    ads&&h(Anuncios,{onClose:()=>setAds(false)}),
     toast&&h("div",{className:"toast"},toast));
 }
 

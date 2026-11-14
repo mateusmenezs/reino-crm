@@ -182,12 +182,13 @@ async function garantirConversa(fone: string, nome: string | null, referral: any
   }
   if (!ct) throw new Error("não consegui criar o contato " + fone);
 
-  const campos = "id, ia_ativa, ia_pausada_ate, is_archived, funil, anuncio, origem";
+  const campos = "id, ia_ativa, ia_pausada_ate, is_archived, funil, anuncio, origem, ad_id, primeira_msg_em";
   let { data: conv } = await sb.from("conversations").select(campos).eq("channel", "oficial").eq("contact_id", ct.id).maybeSingle();
   if (!conv) {
     const ins = await sb.from("conversations").insert({
       channel: "oficial", contact_id: ct.id, stage_id: STAGE_NOVO_LEAD, ia_ativa: true,
-      funil, ia_fase: "novo", anuncio: referral || null, origem: referral ? "anuncio" : null,
+      funil, ia_fase: "novo", anuncio: referral || null, origem: referral ? "anuncio" : "organico",
+      primeira_msg_em: new Date().toISOString(), ...camposAnuncio(referral),
     }).select(campos).single();
     if (ins.error) {
       const again = await sb.from("conversations").select(campos).eq("channel", "oficial").eq("contact_id", ct.id).maybeSingle();
@@ -198,11 +199,136 @@ async function garantirConversa(fone: string, nome: string | null, referral: any
     if (conv.is_archived) patch.is_archived = false;
     // conversa antiga entrando no funil agora: a IA passa a ler só daqui pra frente (não herda assunto velho)
     if (!conv.funil) { patch.funil = funil; patch.ia_contexto_desde = new Date(Date.now() - 1000).toISOString(); patch.ia_fase = "novo"; }
-    if (referral && !conv.anuncio) { patch.anuncio = referral; if (!conv.origem) patch.origem = "anuncio"; }
+    // 1º anúncio vence (não sobrescreve); quem chegou orgânico e depois clicou num anúncio ganha o anúncio
+    if (referral && !conv.anuncio) {
+      patch.anuncio = referral;
+      if (!conv.origem || conv.origem === "organico") patch.origem = "anuncio";
+      if (!conv.ad_id) Object.assign(patch, camposAnuncio(referral));
+    }
+    if (!conv.primeira_msg_em) patch.primeira_msg_em = new Date().toISOString();
     if (Object.keys(patch).length) await sb.from("conversations").update(patch).eq("id", conv.id);
   }
   if (!conv) throw new Error("não consegui criar a conversa " + fone);
+  if (referral?.source_type === "ad" && referral.source_id && !conv.ad_id) {
+    // nomes do anúncio/conjunto/campanha (rápido; se a Graph falhar, segue sem nome)
+    await nomearAnuncio(conv.id as string, referral.source_id).catch((e) => console.error("nome do anúncio", e));
+  }
   return { contactId: ct.id as string, conv };
+}
+
+// ---------------------------------------------------------------- rótulo do anúncio
+function camposAnuncio(referral: any) {
+  if (!referral) return {};
+  return {
+    ad_id: referral.source_type === "ad" ? referral.source_id ?? null : null,
+    ctwa_clid: referral.ctwa_clid ?? null,
+    anuncio_headline: referral.headline ?? null,
+  };
+}
+
+// GET /{ad_id}?fields=name,adset{name},campaign{name}; reaproveita de outra conversa do mesmo anúncio
+async function nomearAnuncio(convId: string, adId: string) {
+  const { data: igual } = await sb.from("conversations").select("anuncio_nome, conjunto_nome, campanha_nome")
+    .eq("ad_id", adId).not("anuncio_nome", "is", null).limit(1).maybeSingle();
+  let nomes = igual;
+  if (!nomes) {
+    const token = (await secret("META_ADS_TOKEN", "meta_ads_token")) || (await secret("WA_TOKEN", "wa_oficial_token"));
+    if (!token) return;
+    const r = await fetch(`${GRAPH}/${adId}?fields=name,adset{name},campaign{name}`, { headers: { Authorization: `Bearer ${token}` } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j?.name) { console.error("Graph não devolveu o anúncio", adId, j?.error?.message ?? r.status); return; }
+    nomes = { anuncio_nome: j.name, conjunto_nome: j.adset?.name ?? null, campanha_nome: j.campaign?.name ?? null };
+  }
+  await sb.from("conversations").update(nomes).eq("id", convId).is("anuncio_nome", null);
+}
+
+// ---------------------------------------------------------------- retomar (IA ficou fora do ar)
+// conversas do Oficial com IA ligada cuja última mensagem é do lead, ainda dentro das 24 h da Meta
+async function pendentesSemResposta(desde?: string) {
+  const limite = new Date(Date.now() - 23.5 * H).toISOString();
+  let q = sb.from("conversations").select("id, ia_ativa, ia_pausada_ate, ia_fase, last_inbound_at, contacts(phone, full_name)")
+    .eq("channel", "oficial").not("funil", "is", null).gte("last_inbound_at", desde && desde > limite ? desde : limite);
+  const { data } = await q;
+  const out: { convId: string; msgId: string; fone: string; nome: string | null }[] = [];
+  for (const c of data || []) {
+    if (c.ia_ativa === false || (c.ia_pausada_ate && new Date(c.ia_pausada_ate) > new Date())) continue;
+    if (["sem_interesse", "encerrado", "transferido"].includes(c.ia_fase)) continue;
+    const { data: ult } = await sb.from("messages").select("id, direction").eq("conversation_id", c.id)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (ult?.direction !== "inbound") continue;
+    const ct: any = c.contacts;
+    out.push({ convId: c.id, msgId: ult.id, fone: digits(ct?.phone), nome: ct?.full_name ?? null });
+  }
+  return out;
+}
+async function retomar(lista: { convId: string; msgId: string; fone: string; nome: string | null }[]) {
+  for (let i = 0; i < lista.length; i += 4) {
+    await Promise.allSettled(lista.slice(i, i + 4).map((p) => rodarIA(p.convId, p.msgId, p.fone, p.nome)
+      .catch((e) => console.error("retomar", p.convId, e))));
+  }
+}
+
+// ---------------------------------------------------------------- Conversions API (business_messaging)
+// Eventos aceitos pela Meta no WhatsApp: LeadSubmitted, QualifiedLead, Purchase… ("Schedule" não existe nesse canal).
+// Cada evento real sai 1 vez por conversa (capi_eventos); com test_event_code vai só pro "Testar eventos".
+const CAPI_GRAPH = "https://graph.facebook.com/v27.0";
+async function capiDataset(token: string, waba: string): Promise<string> {
+  const salvo = await config("oficial_capi_dataset_id");
+  if (salvo) return salvo;
+  // POST no WABA devolve o dataset já ligado a ele (ou cria um)
+  const r = await fetch(`${CAPI_GRAPH}/${waba}/dataset`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j?.id) throw new Error("dataset: " + (j?.error?.message ?? `HTTP ${r.status}`));
+  await sb.from("crm_config").upsert({ chave: "oficial_capi_dataset_id", valor: String(j.id) }, { onConflict: "chave" });
+  return String(j.id);
+}
+
+async function enviarCapi(convId: string, eventName: string, testCode?: string) {
+  const teste = !!testCode;
+  const { data: conv } = await sb.from("conversations").select("ctwa_clid, anuncio").eq("id", convId).maybeSingle();
+  if (!conv) return { ok: false, erro: "conversa não existe" };
+  const clid = conv.ctwa_clid || conv.anuncio?.ctwa_clid || null;
+
+  // não repete: evento real já enviado (ou sem clid) não sai de novo; se deu erro, tenta de novo
+  let rowId: string | null = null;
+  if (!teste) {
+    const { data: ja } = await sb.from("capi_eventos").select("id, status").eq("conversation_id", convId).eq("event_name", eventName).eq("teste", false).maybeSingle();
+    if (ja && ja.status !== "erro") return { ok: true, ja_existia: ja.status };
+    rowId = ja?.id ?? null;
+  }
+  if (!rowId) {
+    const ins = await sb.from("capi_eventos").insert({ conversation_id: convId, event_name: eventName, ctwa_clid: clid, teste, status: "pendente" }).select("id").single();
+    if (ins.error) return { ok: true, ja_existia: "corrida" }; // outra chamada pegou primeiro
+    rowId = ins.data.id;
+  }
+  const fim = (patch: Record<string, unknown>) => sb.from("capi_eventos").update(patch).eq("id", rowId!);
+
+  if (!clid) { await fim({ status: "sem_clid" }); return { ok: false, erro: "conversa sem ctwa_clid (não veio de anúncio)" }; }
+  const token = (await secret("WA_CAPI_TOKEN", "wa_capi_token")) || (await secret("WA_TOKEN", "wa_oficial_token"));
+  const waba = (await config("oficial_waba_id")) || "1707945417028823";
+  try {
+    const dataset = await capiDataset(token, waba);
+    const corpo: Record<string, unknown> = {
+      data: [{
+        event_name: eventName,
+        event_time: Math.floor(Date.now() / 1000),
+        action_source: "business_messaging",
+        messaging_channel: "whatsapp",
+        user_data: { whatsapp_business_account_id: waba, ctwa_clid: clid },
+      }],
+    };
+    if (testCode) corpo.test_event_code = testCode;
+    const r = await fetch(`${CAPI_GRAPH}/${dataset}/events`, {
+      method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(corpo),
+    });
+    const j = await r.json().catch(() => ({}));
+    const ok = r.ok && !j?.error;
+    await fim({ status: ok ? "enviado" : "erro", resposta: j, dataset_id: dataset, enviado_em: new Date().toISOString() });
+    return { ok, resposta: j };
+  } catch (e) {
+    await fim({ status: "erro", resposta: { erro: String(e) } });
+    return { ok: false, erro: String(e) };
+  }
 }
 
 async function processarStatus(s: any) {
@@ -307,7 +433,8 @@ COMO VOCÊ AGE (ferramentas)
 - ver_horarios: traz os horários livres reais da agenda. Use antes de oferecer qualquer horário.
 - agendar: reserva a sessão. Precisa de inicio (exatamente como veio de ver_horarios), nome completo e e-mail.
 - responder: SEMPRE termine com ela. "resposta" é o texto que vai pro cliente no WhatsApp (vazio = não responder).
-  "situacao": conversando | preco_apresentado | sem_interesse.
+  "situacao": conversando | preco_apresentado | preco_aceito | sem_interesse.
+  Use "preco_aceito" no turno em que o cliente concordar com o investimento depois de você apresentar o valor ("ok", "cabe", "tranquilo", "pode ser", "faz sentido", "bora"). Dúvida, objeção ou "vou ver" NÃO é preco_aceito.
   "transferir_humano" = true quando precisar de alguém do time (explique em "motivo"; vale mesmo com "resposta" vazia).
 
 QUANDO PARAR (regra dura)
@@ -337,7 +464,7 @@ const TOOLS = [
       type: "object",
       properties: {
         resposta: { type: "string", description: "Texto para enviar ao cliente (vazio = não responder)" },
-        situacao: { type: "string", enum: ["conversando", "preco_apresentado", "sem_interesse"] },
+        situacao: { type: "string", enum: ["conversando", "preco_apresentado", "preco_aceito", "sem_interesse"] },
         transferir_humano: { type: "boolean" },
         motivo: { type: "string", description: "Por que transferiu (vazio se não transferiu)" },
       },
@@ -498,6 +625,11 @@ async function rodarIA(convId: string, msgId: string, fone: string, nome: string
     }).eq("id", convId);
     return;
   }
+  // aceitou o preço -> LeadSubmitted pra Meta (1 vez por conversa; vale mesmo se agendou no mesmo turno)
+  if (out.situacao === "preco_aceito" || agendou) { // agendar = aceitou o preço (o preço vem antes da agenda no funil)
+    await sb.from("conversations").update({ preco_aceito_em: new Date().toISOString() }).eq("id", convId).is("preco_aceito_em", null);
+    await enviarCapi(convId, "LeadSubmitted").catch((e) => console.error("capi LeadSubmitted", e));
+  }
   if (agendou) return; // a agenda já moveu o card para Agendado
   if (out.situacao === "sem_interesse") {
     await sb.from("conversations").update({ ia_fase: "sem_interesse", fup_proximo_em: null }).eq("id", convId);
@@ -508,7 +640,7 @@ async function rodarIA(convId: string, msgId: string, fone: string, nome: string
   if (viuHorarios) {
     await sb.from("conversations").update({ ia_fase: "horarios" }).eq("id", convId);
     await moverFase(convId, "quase");
-  } else if (out.situacao === "preco_apresentado" && !["horarios"].includes(conv.ia_fase)) {
+  } else if (["preco_apresentado", "preco_aceito"].includes(out.situacao) && !["horarios"].includes(conv.ia_fase)) {
     await sb.from("conversations").update({ ia_fase: "preco" }).eq("id", convId);
   }
   if (resposta) await agendarFup(convId, 1);
@@ -642,10 +774,22 @@ Deno.serve(async (req) => {
   try { body = JSON.parse(raw); } catch (_) { return json({ ok: false, erro: "json inválido" }, 400); }
 
   // chamadas internas (gatilho do banco / pg_cron)
-  if (body?.acao === "enviar" || body?.acao === "fup") {
+  if (body?.acao === "enviar" || body?.acao === "fup" || body?.acao === "capi" || body?.acao === "retomar") {
     const interno = await secret("WA_INTERNAL_SECRET", "wa_oficial_internal");
     if (!interno || req.headers.get("x-reino-secret") !== interno) return json({ ok: false }, 401);
     if (body.acao === "fup") return json(await processarFups());
+    if (body.acao === "retomar") {
+      const lista = await pendentesSemResposta(body.desde ? String(body.desde) : undefined);
+      if (body.so_listar) return json({ ok: true, total: lista.length, lista });
+      // @ts-ignore EdgeRuntime existe no Supabase
+      EdgeRuntime.waitUntil(retomar(lista));
+      return json({ ok: true, retomando: lista.length });
+    }
+    if (body.acao === "capi") {
+      const ev = String(body.event_name || "");
+      if (!["LeadSubmitted", "QualifiedLead"].includes(ev)) return json({ ok: false, erro: "evento não permitido" }, 400);
+      return json(await enviarCapi(String(body.conversation_id), ev, body.test_event_code ? String(body.test_event_code) : undefined));
+    }
     return json(await enviarDoCrm(String(body.message_id)));
   }
 
@@ -658,10 +802,18 @@ Deno.serve(async (req) => {
         const v = ch.value || {};
         for (const s of v.statuses || []) { try { await processarStatus(s); } catch (err) { console.error("status", err); } }
         for (const m of v.messages || []) {
+          let r: Awaited<ReturnType<typeof processarMensagem>> = null;
           try {
-            const r = await processarMensagem(m, v.contacts || []);
+            r = await processarMensagem(m, v.contacts || []);
             if (r) await rodarIA(r.convId, r.msgId, r.fone, r.nome);
-          } catch (err) { console.error("mensagem", err); }
+          } catch (err) {
+            console.error("mensagem", err);
+            // a IA falhou (ex.: sem crédito na Anthropic): o time precisa ver no card
+            if (r) await sb.from("conversations").update({
+              next_action: "⚠️ IA não respondeu (" + String(err).slice(0, 80) + ") — responder manualmente",
+              next_action_at: new Date().toISOString().slice(0, 10),
+            }).eq("id", r.convId).then(() => {}, () => {});
+          }
         }
       }
     }
