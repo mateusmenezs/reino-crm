@@ -544,7 +544,8 @@ async function agendarFup(convId: string, n: number) {
   for (let k = n; k <= offs.length; k++) {
     // nunca empilha: entre um follow-up e o próximo fica pelo menos o intervalo original
     // (ex.: lead escreve 23h56 → 10min, 1h e 6h caem fora do horário; antes saíam 09h00, 09h01, 09h02)
-    const gap = k > 1 ? (offs[k - 1] - offs[k - 2]) * MIN : 0;
+    // o 1º também respeita os 10 min a partir de agora (IA que respondeu atrasada não dispara FUP 30 s depois)
+    const gap = (k > 1 ? offs[k - 1] - offs[k - 2] : offs[0]) * MIN;
     const quando = ajustarHorario(Math.max(base + offs[k - 1] * MIN, Date.now() + gap), limite);
     if (quando) {
       await sb.from("conversations").update({ fup_n: k - 1, fup_proximo_em: new Date(quando).toISOString() }).eq("id", convId);
