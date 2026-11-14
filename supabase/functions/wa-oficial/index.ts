@@ -666,6 +666,14 @@ ${ANGULO_FUP[n >= total ? 4 : Math.min(n, 3)]}
 Se a conversa estava em horários, ofereça de novo (use ver_horarios). Não use agendar neste modo. Termine com responder.
 ANTES DE ESCREVER: se o cliente deu qualquer retorno negativo (engano, sem interesse, agora não, pediu pra parar), se despediu, ou se você já se despediu, NÃO mande nada: "resposta" vazia e situacao "sem_interesse".`;
 
+const normal = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+function repetiu(texto: string, anteriores: string[]): boolean {
+  const t = normal(texto);
+  if (/\b(aqui e|sou|eu sou) o jp\b/.test(t)) return true;
+  const ini = t.slice(0, 35);
+  return anteriores.some((a) => { const x = normal(a); return x.length > 10 && (x === t || (ini.length >= 20 && x.startsWith(ini))); });
+}
+
 async function processarFups() {
   const { data: vencidos } = await sb.from("conversations")
     .select("id, fup_n, fup_proximo_em, ia_ativa, ia_pausada_ate, ia_fase, anuncio, agenda_inicio, agenda_link, last_inbound_at, funil, contacts(phone, full_name)")
@@ -706,7 +714,20 @@ async function processarFups() {
         if (!res.length) break;
         msgs.push({ role: "assistant", content: j.content }, { role: "user", content: res });
       }
-      const texto = limparTexto(out?.resposta);
+      let texto = limparTexto(out?.resposta);
+      // trava de repetição: follow-up não pode se reapresentar nem abrir igual a uma mensagem anterior
+      const anteriores = msgs.filter((x) => x.role === "assistant" && typeof x.content === "string").flatMap((x) => String(x.content).split("\n"));
+      if (texto && out?.situacao !== "sem_interesse" && repetiu(texto, anteriores)) {
+        msgs.push({ role: "assistant", content: texto }, { role: "user", content: "[NOTA INTERNA, não é o cliente: essa mensagem repete a apresentação ou a abertura de uma mensagem que você já mandou. Reescreva SEM cumprimentar, SEM se apresentar e com outro ângulo. Termine com responder.]" });
+        const j = await chamarClaude(apiKey, modelo, system, msgs, tools.filter((t) => t.name === "responder"), { type: "tool", name: "responder" });
+        const novo = (j.content || []).find((u: any) => u.type === "tool_use" && u.name === "responder")?.input;
+        texto = limparTexto(novo?.resposta);
+        if (texto && repetiu(texto, anteriores)) {
+          console.error("fup repetido, não enviado", c.id, texto.slice(0, 80));
+          if (n < total) await agendarFup(c.id, n + 1);
+          continue;
+        }
+      }
       // retorno negativo / conversa encerrada: não manda nada e tira da sequência
       if (out?.situacao === "sem_interesse" || !texto) {
         await sb.from("conversations").update({ fup_proximo_em: null, ia_fase: out?.situacao === "sem_interesse" ? "sem_interesse" : "encerrado" }).eq("id", c.id);
