@@ -15,6 +15,11 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  * Opcionais no reservar (12/11/2026, usados pela IA do WhatsApp Oficial):
  *   conversation_id   -> move ESSA conversa para Agendado (não cria card em outro canal)
  *   confirmar_lead:false -> não manda a confirmação da Cris (a IA confirma no próprio chat)
+ *
+ * CAPI (16/11/2026): se vier capi:{pixel_id,event_id,fbp,fbc} e o pixel estiver em config.capi_pixels,
+ * manda "Schedule" pela API de Conversões da Meta (mesmo event_id do Pixel do navegador -> a Meta deduplica).
+ * Token: env CAPI_TOKEN || app_secrets.capi_token || env WA_TOKEN || env META_ACCESS_TOKEN (o 1º que funcionar).
+ * Resultado fica em agenda_reservas.capi. Diagnóstico: POST ?acao=capi_teste com x-reino-secret (wa_oficial_internal).
  */
 
 const CORS = {
@@ -52,7 +57,69 @@ type Config = {
   webhooks_agendado?: string[];
   cris_webhook?: string;
   cris_confirmacao?: string;
+  capi_pixels?: string[];
 };
+
+// ---------------------------------------------------------------- CAPI (API de Conversões da Meta)
+const GRAPH = "https://graph.facebook.com/v21.0";
+async function sha256(v: string) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));
+  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+async function tokensCapi(): Promise<{ fonte: string; token: string }[]> {
+  const out: { fonte: string; token: string }[] = [];
+  const env = (n: string) => { const v = Deno.env.get(n); if (v) out.push({ fonte: "env:" + n, token: v }); };
+  env("CAPI_TOKEN");
+  const { data } = await sb.from("app_secrets").select("value").eq("key", "capi_token").maybeSingle();
+  if (data?.value) out.push({ fonte: "app_secrets:capi_token", token: String(data.value) });
+  env("WA_TOKEN"); // token do sistema (WhatsApp Oficial) — tem acesso ao Pixel Mentores V3 (testado 16/11)
+  env("META_ACCESS_TOKEN"); // expirou em 31/08/2026
+  return out;
+}
+let tokenBom: { fonte: string; token: string } | null = null;
+async function enviaCapi(pixel: string, evento: Record<string, unknown>, testCode?: string) {
+  const candidatos = tokenBom ? [tokenBom] : await tokensCapi();
+  const tentativas: { fonte: string; erro: string }[] = [];
+  for (const t of candidatos) {
+    const r = await fetch(`${GRAPH}/${pixel}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: [evento], access_token: t.token, ...(testCode ? { test_event_code: testCode } : {}) }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j?.events_received) { tokenBom = t; return { ok: true, fonte: t.fonte, resposta: j, tentativas }; }
+    tentativas.push({ fonte: t.fonte, erro: String(j?.error?.message ?? `HTTP ${r.status}`).slice(0, 200) });
+  }
+  return { ok: false, tentativas };
+}
+async function eventoSchedule(p: {
+  nome: string; email: string; whatsapp: string; eventId: string; url: string;
+  ip: string | null; ua: string | null; fbp: string; fbc: string; reservaId: string;
+}) {
+  const partes = p.nome.toLowerCase().trim().split(/\s+/);
+  const ud: Record<string, unknown> = {
+    em: [await sha256(p.email.toLowerCase().trim())],
+    ph: [await sha256(p.whatsapp)],
+    fn: [await sha256(partes[0])],
+    country: [await sha256("br")],
+    external_id: [await sha256(p.whatsapp)],
+  };
+  if (partes.length > 1) ud.ln = [await sha256(partes[partes.length - 1])];
+  if (p.ip) ud.client_ip_address = p.ip;
+  if (p.ua) ud.client_user_agent = p.ua;
+  if (p.fbp) ud.fbp = p.fbp;
+  if (p.fbc) ud.fbc = p.fbc;
+  return {
+    event_name: "Schedule",
+    event_time: Math.floor(Date.now() / 1000),
+    event_id: p.eventId,
+    action_source: "website",
+    event_source_url: p.url || undefined,
+    user_data: ud,
+    custom_data: { content_name: "agenda-reino", reserva_id: p.reservaId },
+  };
+}
 
 const SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
@@ -365,6 +432,11 @@ async function acaoReservar(req: Request) {
   const respostas = d.respostas && typeof d.respostas === "object" ? d.respostas as Record<string, unknown> : null;
   const notas = limpa(d.notas, 1500);
   const origem = limpa(d.origem, 300);
+  const capiIn = d.capi && typeof d.capi === "object" ? d.capi as Record<string, unknown> : {};
+  const capiPixel = limpa(capiIn.pixel_id, 30);
+  const capiEventId = limpa(capiIn.event_id, 80);
+  const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("cf-connecting-ip");
+  const ua = req.headers.get("user-agent");
 
   let reserva: { id: string } | null = null;
   let chave = "";
@@ -514,6 +586,17 @@ async function acaoReservar(req: Request) {
       agendado_em: isoBRT(inicio), closer: closer.nome, meet_link: meet, ...(utm ?? {}),
     })] : []),
     ...(d.webhooks === false ? [] : cfg.webhooks_agendado ?? []).map((u) => postaComTimeout(u, agendado)),
+    ...(capiPixel && capiEventId && (cfg.capi_pixels ?? []).includes(capiPixel) ? [(async () => {
+      const ev = await eventoSchedule({
+        nome, email, whatsapp, eventId: capiEventId, url: origem, ip, ua,
+        fbp: limpa(capiIn.fbp, 120), fbc: limpa(capiIn.fbc, 300), reservaId: reserva!.id,
+      });
+      const res = await enviaCapi(capiPixel, ev);
+      await sb.from("agenda_reservas").update({
+        capi: { pixel: capiPixel, event_id: capiEventId, ok: res.ok, fonte: res.fonte ?? null, tentativas: res.tentativas, em: new Date().toISOString() },
+      }).eq("id", reserva!.id);
+      if (!res.ok) throw new Error("capi Schedule falhou: " + JSON.stringify(res.tentativas));
+    })()] : []),
   ]);
   extras.forEach((x) => x.status === "rejected" && console.error("pos-reserva falhou", x.reason));
 
@@ -528,6 +611,19 @@ async function acaoReservar(req: Request) {
   });
 }
 
+// teste: manda um Schedule de mentira só pro "Testar eventos" (test_event_code), protegido pelo segredo interno
+async function acaoCapiTeste(req: Request) {
+  const { data } = await sb.from("app_secrets").select("value").eq("key", "wa_oficial_internal").maybeSingle();
+  if (!data?.value || req.headers.get("x-reino-secret") !== data.value) return json({ erro: "nao autorizado" }, 401);
+  const b = await req.json().catch(() => ({}));
+  const ev = await eventoSchedule({
+    nome: "Teste Capi", email: "teste-capi@reinotreinamentos.com", whatsapp: "5511900000000",
+    eventId: "teste_" + Date.now(), url: "https://claudeht2.reinotreinamentos.com/diagnostico/agendar/",
+    ip: null, ua: req.headers.get("user-agent") || "Mozilla/5.0 (teste-capi)", fbp: "", fbc: "", reservaId: "teste",
+  });
+  return json(await enviaCapi(String(b.pixel_id || ""), ev, String(b.test_event_code || "TEST_REINO")));
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const url = new URL(req.url);
@@ -535,6 +631,7 @@ Deno.serve(async (req: Request) => {
   try {
     if (req.method === "GET" && acao === "slots") return await acaoSlots(url);
     if (req.method === "POST" && acao === "reservar") return await acaoReservar(req);
+    if (req.method === "POST" && acao === "capi_teste") return await acaoCapiTeste(req);
     return json({ erro: "acao invalida" }, 400);
   } catch (e) {
     console.error(e);
