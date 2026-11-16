@@ -250,7 +250,37 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const NUMEROS = {
   oficial: { aba:"✅ Oficial", nome:"WhatsApp Oficial", ia:true,  janela24h:true,  vazio:"Nenhuma conversa ainda. Elas aparecem aqui quando alguém chamar o número oficial." },
   jp:      { aba:"🤖 JP",      nome:"WhatsApp do JP",   ia:false, janela24h:false, vazio:"Nenhuma conversa ainda. Elas aparecem aqui quando alguém chamar o WhatsApp do JP." },
+  cris:    { aba:"💬 Cris",    nome:"WhatsApp da Cris", ia:false, janela24h:false, vazio:"Nenhuma conversa ainda. Elas aparecem aqui a partir de 16/11, quando a Cris mandar ou receber mensagem." },
 };
+
+/* ---------- Kanban: colunas = etapas do Pipeline; arrastar o card muda a etapa ---------- */
+function Kanban({lista,stages,onAbrir,onMover}){
+  const [arrastando,setArrastando]=useState(null),[sobre,setSobre]=useState(null);
+  const porEtapa={}; lista.forEach(c=>{ const k=c.stage_id||"_sem"; (porEtapa[k]=porEtapa[k]||[]).push(c); });
+  const cols=[{id:"_sem",name:"Sem etapa",color:"#9b8a8f"}].concat(stages).filter(s=>s.id!=="_sem"||(porEtapa._sem||[]).length);
+  return h("div",{className:"board"},
+    cols.map(s=>{ const cards=porEtapa[s.id]||[];
+      return h("div",{key:s.id,className:"col"+(sobre===s.id?" drop":""),
+          onDragOver:e=>{ if(arrastando){ e.preventDefault(); setSobre(s.id); } },
+          onDragLeave:()=>setSobre(x=>x===s.id?null:x),
+          onDrop:e=>{ e.preventDefault(); setSobre(null); if(arrastando&&s.id!=="_sem") onMover(arrastando,s.id); setArrastando(null); }},
+        h("div",{className:"col-head"},h("span",{className:"pill",style:{background:s.color||"var(--gold)"}}),h("span",{className:"name"},s.name),h("span",{className:"count"},cards.length)),
+        h("div",{className:"col-body"},
+          cards.length===0&&h("div",{className:"empty",style:{padding:"14px 6px"}},"—"),
+          cards.map(c=>{ const ct=c.contacts||{}; const u=c._ult;
+            return h("div",{key:c.id,className:"card"+(arrastando===c.id?" dragging":""),draggable:true,
+                onDragStart:e=>{ setArrastando(c.id); try{ e.dataTransfer.setData("text/plain",c.id); e.dataTransfer.effectAllowed="move"; }catch(_){} },
+                onDragEnd:()=>{ setArrastando(null); setSobre(null); },
+                onClick:()=>onAbrir(c.id)},
+              h("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                h("div",{className:"nm",style:{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},nomeDe(ct)),
+                c.unread_count>0&&h("span",{className:"badge"},c.unread_count)),
+              u&&h("div",{className:"meta",style:{display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},(u.direction==="outbound"?"Você: ":"")+(u.text||"")),
+              h("div",{className:"meta"},h("span",null,fmtFone(ct.phone)),h("span",null,timeAgo(c.last_message_at)),
+                (c.anuncio_nome||c.ad_id)&&h("span",{className:"tag"},"📢 "+(c.anuncio_nome||"anúncio"))));
+          })));
+    }));
+}
 const canalSalvo = ()=>{ try{ const c=localStorage.getItem("reino-atend-canal"); return NUMEROS[c]?c:"oficial"; }catch(e){ return "oficial"; } };
 
 /* ---------- utilidades (iguais ao CRM) ---------- */
@@ -438,6 +468,14 @@ function Atendimento({session}){
   const [convs,setConvs]=useState(null),[stages,setStages]=useState([]),[selId,setSelId]=useState(null),[naoLidasPor,setNaoLidasPor]=useState({});
   const [filtro,setFiltro]=useState("todas"),[busca,setBusca]=useState(""),[cfg,setCfg]=useState(false),[ads,setAds]=useState(false),[toast,setToast]=useState(""),[me,setMe]=useState(null);
   const onToast=useCallback(t=>{ setToast(t); setTimeout(()=>setToast(""),2600); },[]);
+  const [visao,setVisaoSt]=useState(()=>{ try{ return localStorage.getItem("reino-atend-visao")==="kanban"?"kanban":"lista"; }catch(e){ return "lista"; } });
+  const setVisao=(v)=>{ try{ localStorage.setItem("reino-atend-visao",v); }catch(e){} setVisaoSt(v); };
+  const moverCard=async(id,stageId)=>{
+    const st=stages.find(s=>s.id===stageId)||null;
+    setConvs(cs=>(cs||[]).map(c=>c.id===id?Object.assign({},c,{stage_id:stageId,kanban_stages:st?{name:st.name,color:st.color}:null}):c));
+    const {error}=await sb.from("conversations").update({stage_id:stageId}).eq("id",id);
+    if(error){ onToast("Erro: "+error.message); load(); } else onToast("Movido pra "+(st?st.name:"etapa"));
+  };
   const trocarCanal=(c)=>{ if(c===canal) return; try{ localStorage.setItem("reino-atend-canal",c); }catch(e){}
     setCanalSt(c); setConvs(null); setSelId(null); setFiltro("todas"); };
   const load=useCallback(async()=>{
@@ -497,9 +535,15 @@ function Atendimento({session}){
     h("div",{className:"main"},
       h("div",{className:"topbar"},
         h("div",{className:"crumb"},"Atendimento · "+numero.nome),
+        h("div",{style:{display:"flex",gap:6}},
+          h("button",{className:"subtab"+(visao==="lista"?" active":""),onClick:()=>setVisao("lista")},"💬 Conversas"),
+          h("button",{className:"subtab"+(visao==="kanban"?" active":""),onClick:()=>{ setVisao("kanban"); setSelId(null); }},"🗂 Kanban")),
         h(ThemeToggle,null),
         h("button",{className:"out",onClick:()=>sb.auth.signOut()},"sair")),
-      h("div",{className:"inbox"+(sel?" has-sel":"")},
+      visao==="kanban"
+      ? (convs===null?h("div",{className:"center"},h("div",{className:"spin"}))
+         :h(Kanban,{lista:lista,stages:stages,onAbrir:(id)=>{ setVisao("lista"); setSelId(id); },onMover:moverCard}))
+      : h("div",{className:"inbox"+(sel?" has-sel":"")},
         h("div",{className:"clist"},
           h("div",{className:"lhead"},h("input",{placeholder:"Buscar nome ou telefone…",value:busca,onChange:e=>setBusca(e.target.value)})),
           h("div",{className:"citems"},
