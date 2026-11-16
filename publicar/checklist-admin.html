@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Checklist dos clientes · Reino CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="vendor/supabase.js"></script>
+<style>
+  :root{--bg:#F5F3ED;--card:#FFF;--ink:#2A0B12;--vinho:#3B101D;--laranja:#FF4D00;--muted:#8A7D80;--line:#E7E1D8;--ok:#16A34A}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Manrope",system-ui,sans-serif;line-height:1.5}
+  .wrap{max-width:860px;margin:0 auto;padding:22px 16px 60px}
+  .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:8px;color:var(--vinho);font-weight:800;font-size:15px}
+  h1{font-size:21px;margin:14px 0 2px;color:var(--vinho);font-weight:800}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .search{flex:1;min-width:180px;padding:10px 13px;border:1px solid var(--line);border-radius:10px;font-size:14px;background:#FFF;color:var(--ink);font-family:inherit}
+  .chip{border:1px solid var(--line);background:#FFF;color:var(--muted);border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer}
+  .chip.active{background:var(--vinho);color:#FFF;border-color:var(--vinho)}
+  .count{font-size:12.5px;color:var(--muted);margin-left:auto}
+  .row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 14px;margin-bottom:9px}
+  .nm{font-weight:800;font-size:14.5px}
+  .rmeta{font-size:12px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pill{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--laranja);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+  .phase{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;border-radius:999px;padding:2px 8px}
+  .ph-onb{background:#FFF4E5;color:#B45309}
+  .ph-exe{background:#E8F6EC;color:var(--ok)}
+  .prog{flex:0 0 120px;min-width:110px}
+  .pbar{height:7px;background:#EDE7DD;border-radius:999px;overflow:hidden}
+  .pfill{height:100%;background:var(--laranja);border-radius:999px}
+  .ptxt{font-size:11px;color:var(--muted);font-weight:600;margin-top:3px;text-align:right}
+  .acts{display:flex;gap:6px;flex:0 0 auto}
+  .btn{border:1px solid var(--line);background:#FFF;color:var(--vinho);border-radius:9px;padding:7px 11px;font-size:12.5px;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap;font-family:inherit}
+  .btn.lar{background:var(--laranja);color:#FFF;border-color:var(--laranja)}
+  .grow{flex:1;min-width:0}
+  .center{min-height:55vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;color:var(--muted)}
+  .spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--laranja);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .box{background:#FFF;border:1px solid var(--line);border-radius:14px;padding:20px;max-width:340px;width:100%}
+  .box input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;margin-top:8px;font-size:14px;font-family:inherit}
+  .box button{width:100%;margin-top:10px;padding:11px;border:0;border-radius:9px;background:var(--laranja);color:#FFF;font-weight:800;cursor:pointer;font-family:inherit}
+  .err{background:#FDECEC;color:#B42318;border-radius:8px;padding:8px 11px;font-size:13px;margin-top:8px}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--vinho);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:620px){.prog{display:none}.row{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="center"><div class="spin"></div><div>Carregando…</div></div></div>
+<div class="toast" id="toast"></div>
+<script>
+const SUPABASE_URL="https://lcbymyvzhnwcmpdukyqr.supabase.co";
+const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjYnlteXZ6aG53Y21wZHVreXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMjUzODgsImV4cCI6MjA4OTcwMTM4OH0.27aTgFOM0ZN3MC1s9O9iq19ihxjfuUJ16-gz2FLNsxQ";
+const sb=supabase.createClient(SUPABASE_URL,ANON);
+const ITEM_KEYS=["briefing","hospedagem","anuncios","n8n","supabase","evolution"];
+const LINK_BASE=location.origin+"/checklist-cliente#c=";
+const app=document.getElementById("app");
+const toastEl=document.getElementById("toast");let toastT;
+function toast(m){toastEl.textContent=m;toastEl.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>toastEl.classList.remove("show"),2000);}
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let ROWS=[], FILTRO="todos", BUSCA="";
+
+function loginView(msg){
+  app.innerHTML='<div class="center"><div class="box"><div class="logo">Reino <b style="color:var(--laranja)">CRM</b></div>'
+    +'<div style="font-weight:800;color:var(--vinho);margin:8px 0 2px">Checklist dos clientes</div>'
+    +'<div style="font-size:12.5px;color:var(--muted)">Entre com sua conta do time.</div>'
+    +(msg?'<div class="err">'+esc(msg)+'</div>':'')
+    +'<input id="em" placeholder="E-mail" autocomplete="username">'
+    +'<input id="pw" type="password" placeholder="Senha" autocomplete="current-password">'
+    +'<button id="go">Entrar</button></div></div>';
+  const go=async()=>{const em=document.getElementById("em").value.trim(),pw=document.getElementById("pw").value;
+    const {error}=await sb.auth.signInWithPassword({email:em,password:pw});
+    if(error){loginView("E-mail ou senha incorretos.");}else{boot();}};
+  document.getElementById("go").onclick=go;
+  document.getElementById("pw").onkeydown=e=>{if(e.key==="Enter")go();};
+}
+
+async function boot(){
+  app.innerHTML='<div class="center"><div class="spin"></div><div>Carregando…</div></div>';
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){loginView("");return;}
+  const {data:me}=await sb.from("team_members").select("role").eq("id",session.user.id).maybeSingle();
+  if(!me){app.innerHTML='<div class="center">🔒<div>Sua conta não é do time. Fale com o Mateus.</div><button class="btn" onclick="sb.auth.signOut().then(()=>location.reload())">sair</button></div>';return;}
+  // dados
+  const r=await sb.from("conversations").select("id,produto,venda_em,contacts(full_name)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false});
+  const convs=r.data||[];const ids=convs.map(c=>c.id);
+  const c2={},prog={};
+  if(ids.length){
+    const ec=await sb.from("entrega_calls").select("conversation_id,feita_em").eq("ordem",2).in("conversation_id",ids);
+    (ec.data||[]).forEach(x=>{if(x.feita_em)c2[x.conversation_id]=true;});
+    const ck=await sb.from("checklist_cliente").select("conversation_id,item_key,feito").in("conversation_id",ids);
+    (ck.data||[]).forEach(x=>{if(ITEM_KEYS.indexOf(x.item_key)>=0&&x.feito){(prog[x.conversation_id]=prog[x.conversation_id]||0);prog[x.conversation_id]++;}});
+  }
+  ROWS=convs.map(c=>({id:c.id,nome:(c.contacts&&c.contacts.full_name)||"(sem nome)",produto:c.produto||"—",feitos:prog[c.id]||0,exec:!!c2[c.id]}));
+  render();
+}
+
+function render(){
+  const vis=ROWS.filter(x=>{
+    if(FILTRO==="onb"&&x.exec)return false;
+    if(FILTRO==="exe"&&!x.exec)return false;
+    if(BUSCA&&(x.nome.toLowerCase().indexOf(BUSCA)<0&&x.produto.toLowerCase().indexOf(BUSCA)<0))return false;
+    return true;
+  });
+  let h='<div class="top"><div class="logo"><svg width="22" height="21" viewBox="0 0 88 84"><g fill="currentColor"><path d="M12 72V12H68V44H44V28H28V72Z"/><path d="M40 48H56L76 72H54L40 56Z"/></g></svg>Reino <b style="color:var(--laranja)">CRM</b></div>'
+    +'<a class="btn" href="/" style="margin-left:auto">← voltar ao CRM</a></div>'
+    +'<h1>Checklist dos clientes</h1>'
+    +'<p class="sub">Copie o link pessoal de cada cliente e mande pra ele. O progresso do setup atualiza sozinho conforme ele vai marcando.</p>'
+    +'<div class="bar">'
+    +'<input class="search" id="busca" placeholder="Buscar por nome ou produto…" value="'+esc(BUSCA)+'">'
+    +chip("todos","Todos")+chip("onb","🚀 Onboarding")+chip("exe","⚡ Execução")
+    +'<span class="count">'+vis.length+' cliente(s)</span></div>';
+  if(vis.length===0){h+='<div style="color:var(--muted);padding:24px 4px">Nenhum cliente.</div>';}
+  vis.forEach(x=>{
+    const pct=Math.round(x.feitos/ITEM_KEYS.length*100);
+    h+='<div class="row">'
+      +'<div class="grow"><div class="nm">'+esc(x.nome)+'</div>'
+      +'<div class="rmeta"><span class="pill">'+esc(x.produto)+'</span>'
+      +'<span class="phase '+(x.exec?"ph-exe":"ph-onb")+'">'+(x.exec?"Execução":"Onboarding")+'</span></div></div>'
+      +'<div class="prog"><div class="pbar"><div class="pfill" style="width:'+pct+'%"></div></div><div class="ptxt">setup '+x.feitos+'/'+ITEM_KEYS.length+'</div></div>'
+      +'<div class="acts"><button class="btn lar" data-copy="'+esc(x.id)+'">📋 Copiar link</button>'
+      +'<a class="btn" href="'+LINK_BASE+encodeURIComponent(x.id)+'" target="_blank" rel="noopener">Abrir ↗</a></div>'
+      +'</div>';
+  });
+  app.innerHTML=h;
+  const b=document.getElementById("busca");
+  b.oninput=()=>{BUSCA=b.value.trim().toLowerCase();const p=b.selectionStart;render();const nb=document.getElementById("busca");nb.focus();try{nb.setSelectionRange(p,p);}catch(e){}};
+  app.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{FILTRO=c.getAttribute("data-f");render();});
+  app.querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=()=>{
+    const link=LINK_BASE+encodeURIComponent(btn.getAttribute("data-copy"));
+    (navigator.clipboard?navigator.clipboard.writeText(link):Promise.reject()).then(()=>toast("Link copiado ✓")).catch(()=>{window.prompt("Copie o link:",link);});
+  });
+}
+function chip(f,label){return '<button class="chip'+(FILTRO===f?" active":"")+'" data-f="'+f+'">'+label+'</button>';}
+
+boot();
+</script>
+</body>
+</html>
