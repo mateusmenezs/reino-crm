@@ -59,6 +59,9 @@
   .b-feita{background:var(--okbg);color:var(--ok)}
   .b-agendada{background:#FFF4E5;color:#B45309}
   .b-aagendar{background:#F1ECE3;color:var(--muted)}
+  .btnag{flex:0 0 auto;font-size:12.5px;font-weight:800;color:#fff;background:var(--laranja);border-radius:999px;padding:8px 16px;text-decoration:none;white-space:nowrap}
+  .btnag:active{filter:brightness(.94)}
+  .metalink{color:var(--laranja);font-weight:700;text-decoration:none}
   /* estados */
   .center{min-height:60vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;color:var(--muted)}
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--laranja);border-radius:50%;animation:sp 1s linear infinite}
@@ -80,14 +83,17 @@
 const SUPABASE_URL = "https://lcbymyvzhnwcmpdukyqr.supabase.co";
 const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjYnlteXZ6aG53Y21wZHVreXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMjUzODgsImV4cCI6MjA4OTcwMTM4OH0.27aTgFOM0ZN3MC1s9O9iq19ihxjfuUJ16-gz2FLNsxQ";
 const FN = SUPABASE_URL + "/functions/v1/checklist-cliente";
-// Links opcionais (deixe "" pra esconder o botão). Preencher quando tiver as aulas:
-const LINK_BRIEFING   = "";
+// n8n — briefing oficial (Discovery) e autoagendamento por call
+const N8N = "https://scarycrocodile-n8n.cloudfy.live";
+const DISCOVERY_URL = N8N + "/webhook/discovery-impl";
+const AGENDAR_CALL_URL = N8N + "/webhook/agendar-call";
+// Aulas opcionais (deixe "" pra esconder o botão):
 const AULA_HOSPEDAGEM = "";
 const AULA_ANUNCIOS   = "";
 
 const GRUPOS = [
   { titulo:"📋 Briefing",
-    itens:[ {key:"briefing", label:"Preencher o briefing", help:"O formulário com as informações do seu negócio.", link:LINK_BRIEFING, linkLabel:"Abrir briefing"} ] },
+    itens:[ {key:"briefing", label:"Preencher o briefing", help:"O formulário com as informações do seu negócio. A 1ª call já sai agendada no fim dele."} ] },
   { titulo:"⚙️ Setup",
     itens:[
       {key:"hospedagem", label:"Hospedagem / Domínio contratado", link:AULA_HOSPEDAGEM, linkLabel:"Ver aula"},
@@ -106,7 +112,7 @@ const ITEM_KEYS = GRUPOS.flatMap(g=>g.itens.map(i=>i.key));
 const params = new URLSearchParams((location.hash||"").replace(/^#/,"")) ;
 const qp = new URLSearchParams(location.search);
 const C = (params.get("c") || qp.get("c") || "").trim();
-let STATE = { nome:"", produto:"", itens:{}, calls:[] };
+let STATE = { nome:"", produto:"", briefing_ok:false, itens:{}, calls:[] };
 const app = document.getElementById("app");
 const toastEl = document.getElementById("toast");
 let toastT;
@@ -149,13 +155,17 @@ function render(){
     if(g.ajuda) html += '<div class="gajuda">'+esc(g.ajuda)+'</div>';
     html += '<div class="list">';
     g.itens.forEach(function(it){
-      const done = !!STATE.itens[it.key];
-      html += '<div class="item'+(done?' done':'')+'" data-key="'+it.key+'" role="checkbox" aria-checked="'+done+'" tabindex="0">'
+      var link=it.link, linkLabel=it.linkLabel;
+      if(it.key==="briefing"){ link=DISCOVERY_URL+"?c="+encodeURIComponent(C); linkLabel="Abrir briefing"; }
+      var autoDone = (it.key==="briefing" && STATE.briefing_ok);  // briefing preenchido = marca sozinho
+      var done = !!STATE.itens[it.key] || autoDone;
+      html += '<div class="item'+(done?' done':'')+(autoDone?' readonly':'')+'"'
+        + (autoDone? '' : ' data-key="'+it.key+'" role="checkbox" aria-checked="'+done+'" tabindex="0"')+'>'
         + '<div class="box">'+CHECK+'</div>'
         + '<div class="ibody">'
         +   '<div class="ilabel">'+esc(it.label)+'</div>'
-        +   (it.help? '<div class="ihelp">'+esc(it.help)+'</div>':'')
-        +   (it.link? '<a class="ilink" href="'+esc(it.link)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">▶ '+esc(it.linkLabel||"Ver")+'</a>':'')
+        +   (autoDone? '<div class="ihelp">Preenchido ✓</div>' : (it.help? '<div class="ihelp">'+esc(it.help)+'</div>':''))
+        +   (link? '<a class="ilink" href="'+esc(link)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">▶ '+esc(linkLabel||"Ver")+'</a>':'')
         + '</div></div>';
     });
     html += '</div></div>';
@@ -166,14 +176,22 @@ function render(){
     html += '<div class="grupo"><div class="gtit">🗓️ Suas reuniões</div>'
       + '<div class="gajuda">Agendadas e conduzidas pelo time Reino. Status atualizado automaticamente.</div><div class="list">';
     STATE.calls.forEach(function(cl){
-      let badge, cls;
-      if(cl.status==="feita"){ badge="Feita ✓"; cls="b-feita"; }
-      else if(cl.status==="agendada"){ badge= cl.inicio? ("Agendada "+fmtData(cl.inicio)) : "Agendada"; cls="b-agendada"; }
-      else { badge="A agendar"; cls="b-aagendar"; }
+      var meta = "com "+esc(cl.responsavel||"time Reino");
+      var right="";
+      if(cl.status==="feita"){
+        right = '<div class="badge b-feita">Feita ✓</div>';
+      } else if(cl.status==="agendada"){
+        right = '<div class="badge b-agendada">'+(cl.inicio?("Agendada "+esc(fmtData(cl.inicio))):"Agendada")+'</div>';
+        if(cl.meet_link) meta += ' · <a class="metalink" href="'+esc(cl.meet_link)+'" target="_blank" rel="noopener">entrar no Meet</a>';
+      } else { // a_agendar
+        if(cl.ordem===1){ right = '<div class="badge b-aagendar">No briefing</div>'; meta += ' · sai agendada no fim do briefing'; }
+        else if(cl.tem_agenda){ right = '<a class="btnag" href="'+AGENDAR_CALL_URL+'?c='+encodeURIComponent(C)+'&ordem='+cl.ordem+'" target="_blank" rel="noopener">Agendar</a>'; }
+        else { right = '<div class="badge b-aagendar">A agendar</div>'; meta += ' · o time marca com você'; }
+      }
       html += '<div class="call'+(cl.status==="feita"?' feita':'')+'">'
         + '<div class="cnum">'+(cl.status==="feita"?'✓':cl.ordem)+'</div>'
-        + '<div class="cbody"><div class="ctit">'+esc(cl.titulo)+'</div><div class="cmeta">com '+esc(cl.responsavel||"time Reino")+'</div></div>'
-        + '<div class="badge '+cls+'">'+esc(badge)+'</div></div>';
+        + '<div class="cbody"><div class="ctit">'+esc(cl.titulo)+'</div><div class="cmeta">'+meta+'</div></div>'
+        + right+'</div>';
     });
     html += '</div></div>';
   }
@@ -210,7 +228,7 @@ if(!C){
 }else{
   api({action:"get"}).then(function(r){
     if(!r || r.error){ erro("Não encontramos sua jornada", "Confira se abriu pelo link certo, ou fale com seu contato no time."); return; }
-    STATE = { nome:r.nome||"", produto:r.produto||"", itens:r.itens||{}, calls:r.calls||[] };
+    STATE = { nome:r.nome||"", produto:r.produto||"", briefing_ok:!!r.briefing_ok, itens:r.itens||{}, calls:r.calls||[] };
     render();
   }).catch(function(){ erro("Falha ao carregar", "Verifique sua conexão e recarregue a página."); });
 }
