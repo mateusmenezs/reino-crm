@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex" />
+<title>Sua jornada · Reino</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F3ED; --card:#FFFFFF; --ink:#2A0B12; --vinho:#3B101D; --laranja:#FF4D00;
+    --muted:#8A7D80; --line:#E7E1D8; --ok:#16A34A; --okbg:#E8F6EC;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Manrope",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:env(safe-area-inset-top) 16px calc(40px + env(safe-area-inset-bottom))}
+  .wrap{max-width:560px;margin:0 auto}
+  header{padding:26px 2px 10px}
+  .logo{display:flex;align-items:center;gap:9px;color:var(--vinho);font-weight:800;font-size:15px;letter-spacing:.2px}
+  .logo svg{flex:0 0 auto}
+  h1{font-size:23px;line-height:1.2;margin:16px 0 2px;color:var(--vinho);font-weight:800}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+  .prodpill{display:inline-block;margin-top:10px;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--laranja);background:#FFF;border:1px solid var(--line);border-radius:999px;padding:4px 11px}
+  /* progresso */
+  .prog{margin:18px 0 6px}
+  .progbar{height:10px;background:#EDE7DD;border-radius:999px;overflow:hidden}
+  .progfill{height:100%;background:linear-gradient(90deg,var(--laranja),#FF7A3C);border-radius:999px;transition:width .35s ease}
+  .progtxt{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);font-weight:600;margin-top:7px}
+  /* grupos */
+  .grupo{margin-top:22px}
+  .gtit{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--vinho);margin:0 2px 9px}
+  .gajuda{font-size:12.5px;color:var(--muted);margin:-5px 2px 9px}
+  .list{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .item{display:flex;align-items:flex-start;gap:13px;padding:15px 15px;border-top:1px solid var(--line);cursor:pointer;user-select:none;transition:background .12s}
+  .item:first-child{border-top:none}
+  .item:active{background:#FBF9F4}
+  .item.readonly{cursor:default}
+  .box{flex:0 0 auto;width:26px;height:26px;border-radius:9px;border:2px solid #D8CFC2;background:#FFF;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s}
+  .box svg{width:16px;height:16px;opacity:0;transform:scale(.5);transition:all .15s}
+  .item.done .box{background:var(--ok);border-color:var(--ok)}
+  .item.done .box svg{opacity:1;transform:scale(1)}
+  .ibody{flex:1;min-width:0}
+  .ilabel{font-size:15px;font-weight:600;color:var(--ink)}
+  .item.done .ilabel{color:var(--muted);text-decoration:line-through}
+  .ilink{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:12.5px;font-weight:700;color:var(--laranja);text-decoration:none;background:#FFF2EC;border:1px solid #FFD9C7;border-radius:8px;padding:4px 9px}
+  .ihelp{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .busy{opacity:.55;pointer-events:none}
+  /* reuniões */
+  .call{display:flex;align-items:center;gap:12px;padding:13px 15px;border-top:1px solid var(--line)}
+  .call:first-child{border-top:none}
+  .cnum{flex:0 0 auto;width:28px;height:28px;border-radius:50%;background:var(--vinho);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .call.feita .cnum{background:var(--ok)}
+  .cbody{flex:1;min-width:0}
+  .ctit{font-size:14.5px;font-weight:700}
+  .cmeta{font-size:12px;color:var(--muted);margin-top:1px}
+  .badge{flex:0 0 auto;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;border-radius:999px;padding:4px 10px;white-space:nowrap}
+  .b-feita{background:var(--okbg);color:var(--ok)}
+  .b-agendada{background:#FFF4E5;color:#B45309}
+  .b-aagendar{background:#F1ECE3;color:var(--muted)}
+  /* estados */
+  .center{min-height:60vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;color:var(--muted)}
+  .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--laranja);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .done-banner{background:var(--okbg);border:1px solid #BFE6CB;color:#166534;border-radius:14px;padding:14px 16px;font-weight:700;font-size:14px;margin-top:18px;display:flex;gap:9px;align-items:center}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--vinho);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.18);opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+  .toast.show{opacity:1}
+  footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:26px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="center"><div class="spin"></div><div>Carregando sua jornada…</div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== Config =====
+const SUPABASE_URL = "https://lcbymyvzhnwcmpdukyqr.supabase.co";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjYnlteXZ6aG53Y21wZHVreXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMjUzODgsImV4cCI6MjA4OTcwMTM4OH0.27aTgFOM0ZN3MC1s9O9iq19ihxjfuUJ16-gz2FLNsxQ";
+const FN = SUPABASE_URL + "/functions/v1/checklist-cliente";
+// Links opcionais (deixe "" pra esconder o botão). Preencher quando tiver as aulas:
+const LINK_BRIEFING   = "";
+const AULA_HOSPEDAGEM = "";
+const AULA_ANUNCIOS   = "";
+
+const GRUPOS = [
+  { titulo:"📋 Briefing",
+    itens:[ {key:"briefing", label:"Preencher o briefing", help:"O formulário com as informações do seu negócio.", link:LINK_BRIEFING, linkLabel:"Abrir briefing"} ] },
+  { titulo:"⚙️ Setup",
+    itens:[
+      {key:"hospedagem", label:"Hospedagem / Domínio contratado", link:AULA_HOSPEDAGEM, linkLabel:"Ver aula"},
+      {key:"anuncios",   label:"Conta de anúncios configurada",   link:AULA_ANUNCIOS,   linkLabel:"Ver aula"},
+    ] },
+  { titulo:"🔑 Acessos (Cloudfy)", ajuda:"Libere os acessos pra montarmos suas automações.",
+    itens:[
+      {key:"n8n",       label:"Acesso ao n8n liberado"},
+      {key:"supabase",  label:"Acesso ao Supabase liberado"},
+      {key:"evolution", label:"Acesso ao Evolution / WhatsApp liberado"},
+    ] },
+];
+const ITEM_KEYS = GRUPOS.flatMap(g=>g.itens.map(i=>i.key));
+
+// ===== Estado =====
+const params = new URLSearchParams((location.hash||"").replace(/^#/,"")) ;
+const qp = new URLSearchParams(location.search);
+const C = (params.get("c") || qp.get("c") || "").trim();
+let STATE = { nome:"", produto:"", itens:{}, calls:[] };
+const app = document.getElementById("app");
+const toastEl = document.getElementById("toast");
+let toastT;
+function toast(msg){ toastEl.textContent=msg; toastEl.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove("show"),2200); }
+
+function api(payload){
+  return fetch(FN,{method:"POST",headers:{"Authorization":"Bearer "+ANON,"apikey":ANON,"Content-Type":"application/json"},body:JSON.stringify(Object.assign({c:C},payload))})
+    .then(r=>r.json());
+}
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function fmtData(iso){ if(!iso)return ""; try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(e){ return ""; } }
+const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
+function render(){
+  const feitos = ITEM_KEYS.filter(k=>STATE.itens[k]).length;
+  const tot = ITEM_KEYS.length;
+  const pct = tot? Math.round(feitos/tot*100) : 0;
+  const nome = STATE.nome || "cliente";
+  const primeiro = nome.split(" ")[0];
+
+  let html = ''
+    + '<header>'
+    +   '<div class="logo">'
+    +     '<svg width="24" height="23" viewBox="0 0 88 84" aria-hidden="true"><g fill="currentColor"><path d="M12 72V12H68V44H44V28H28V72Z"/><path d="M40 48H56L76 72H54L40 56Z"/></g></svg>'
+    +     '<span>Reino</span>'
+    +   '</div>'
+    +   '<h1>Olá, '+esc(primeiro)+' 👋</h1>'
+    +   '<p class="sub">Esta é a sua jornada de entrada. Vá marcando o que já concluiu — a gente acompanha por aqui.</p>'
+    +   (STATE.produto? '<span class="prodpill">Programa '+esc(STATE.produto)+'</span>' : '')
+    +   '<div class="prog"><div class="progbar"><div class="progfill" style="width:'+pct+'%"></div></div>'
+    +     '<div class="progtxt"><span>'+feitos+' de '+tot+' passos do setup</span><span>'+pct+'%</span></div></div>'
+    + '</header>';
+
+  if(feitos===tot && tot>0){
+    html += '<div class="done-banner">🎉 Setup completo! É só seguir pelas reuniões abaixo.</div>';
+  }
+
+  GRUPOS.forEach(function(g){
+    html += '<div class="grupo"><div class="gtit">'+esc(g.titulo)+'</div>';
+    if(g.ajuda) html += '<div class="gajuda">'+esc(g.ajuda)+'</div>';
+    html += '<div class="list">';
+    g.itens.forEach(function(it){
+      const done = !!STATE.itens[it.key];
+      html += '<div class="item'+(done?' done':'')+'" data-key="'+it.key+'" role="checkbox" aria-checked="'+done+'" tabindex="0">'
+        + '<div class="box">'+CHECK+'</div>'
+        + '<div class="ibody">'
+        +   '<div class="ilabel">'+esc(it.label)+'</div>'
+        +   (it.help? '<div class="ihelp">'+esc(it.help)+'</div>':'')
+        +   (it.link? '<a class="ilink" href="'+esc(it.link)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">▶ '+esc(it.linkLabel||"Ver")+'</a>':'')
+        + '</div></div>';
+    });
+    html += '</div></div>';
+  });
+
+  // Reuniões (calls) — só leitura
+  if(STATE.calls && STATE.calls.length){
+    html += '<div class="grupo"><div class="gtit">🗓️ Suas reuniões</div>'
+      + '<div class="gajuda">Agendadas e conduzidas pelo time Reino. Status atualizado automaticamente.</div><div class="list">';
+    STATE.calls.forEach(function(cl){
+      let badge, cls;
+      if(cl.status==="feita"){ badge="Feita ✓"; cls="b-feita"; }
+      else if(cl.status==="agendada"){ badge= cl.inicio? ("Agendada "+fmtData(cl.inicio)) : "Agendada"; cls="b-agendada"; }
+      else { badge="A agendar"; cls="b-aagendar"; }
+      html += '<div class="call'+(cl.status==="feita"?' feita':'')+'">'
+        + '<div class="cnum">'+(cl.status==="feita"?'✓':cl.ordem)+'</div>'
+        + '<div class="cbody"><div class="ctit">'+esc(cl.titulo)+'</div><div class="cmeta">com '+esc(cl.responsavel||"time Reino")+'</div></div>'
+        + '<div class="badge '+cls+'">'+esc(badge)+'</div></div>';
+    });
+    html += '</div></div>';
+  }
+
+  html += '<footer>Reino · Vendas &amp; IA — qualquer dúvida, fale com seu contato no time.</footer>';
+  app.innerHTML = html;
+
+  app.querySelectorAll(".item[data-key]").forEach(function(el){
+    const toggle=function(){ onToggle(el); };
+    el.addEventListener("click", toggle);
+    el.addEventListener("keydown", function(e){ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); toggle(); } });
+  });
+}
+
+function onToggle(el){
+  const key = el.getAttribute("data-key");
+  const novo = !STATE.itens[key];
+  STATE.itens[key] = novo;                 // otimista
+  el.classList.add("busy");
+  // atualiza só o essencial sem re-render completo (mantém posição)
+  render();
+  api({action:"set", item_key:key, feito:novo}).then(function(r){
+    if(!r || r.error){ STATE.itens[key] = !novo; render(); toast("Não deu pra salvar, tente de novo."); }
+    else { toast(novo? "Marcado ✓" : "Desmarcado"); }
+  }).catch(function(){ STATE.itens[key] = !novo; render(); toast("Sem conexão — tente de novo."); });
+}
+
+function erro(titulo, msg){
+  app.innerHTML = '<div class="center"><div style="font-size:40px">🔒</div><div style="font-weight:800;color:var(--vinho);font-size:17px">'+esc(titulo)+'</div><div style="max-width:300px">'+esc(msg)+'</div></div>';
+}
+
+if(!C){
+  erro("Link inválido", "Abra esta página pelo seu link pessoal — o que o time da Reino te enviou.");
+}else{
+  api({action:"get"}).then(function(r){
+    if(!r || r.error){ erro("Não encontramos sua jornada", "Confira se abriu pelo link certo, ou fale com seu contato no time."); return; }
+    STATE = { nome:r.nome||"", produto:r.produto||"", itens:r.itens||{}, calls:r.calls||[] };
+    render();
+  }).catch(function(){ erro("Falha ao carregar", "Verifique sua conexão e recarregue a página."); });
+}
+</script>
+</body>
+</html>
