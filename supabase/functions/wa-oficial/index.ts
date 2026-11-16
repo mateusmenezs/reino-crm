@@ -89,6 +89,26 @@ async function waEnviarTexto(to: string, body: string) {
   return { ok: true, wamid: j.messages[0].id as string };
 }
 
+// modelo aprovado (pra puxar conversa fora da janela de 24 h). params = variáveis do corpo, em ordem.
+async function waEnviarTemplate(to: string, nome: string, idioma: string, params: string[]) {
+  const token = await secret("WA_TOKEN", "wa_oficial_token");
+  const phoneId = Deno.env.get("WA_PHONE_NUMBER_ID") || (await secret("WA_PHONE_NUMBER_ID", "wa_oficial_phone_id")) || DEFAULT_PHONE_ID;
+  if (!token) return { ok: false, erro: "Token do WhatsApp (WA_TOKEN) não configurado" };
+  const template: any = { name: nome, language: { code: idioma } };
+  if (params.length) template.components = [{ type: "body", parameters: params.map((t) => ({ type: "text", text: t })) }];
+  const r = await fetch(`${GRAPH}/${phoneId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to, type: "template", template }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j?.messages?.[0]?.id) {
+    const e = j?.error;
+    return { ok: false, erro: e ? `${e.code ?? ""} ${e.message ?? ""} ${e.error_data?.details ?? ""}`.trim() : `HTTP ${r.status}` };
+  }
+  return { ok: true, wamid: j.messages[0].id as string };
+}
+
 async function waMarcarLida(wamid: string) {
   try {
     const token = await secret("WA_TOKEN", "wa_oficial_token");
@@ -496,6 +516,7 @@ async function montarSistema(conv: any, fone: string, nome: string | null, extra
   return (await config("oficial_ia_prompt")) + FORMATO + extra +
     `\n\nDADOS DO CLIENTE\nNome no WhatsApp: ${nome || "(sem nome)"}\nTelefone: ${fone}\nAgora: ${agoraBR()}` +
     (a ? `\nVeio do anúncio: ${[a.headline, a.body].filter(Boolean).join(" — ").slice(0, 400) || "(sem texto)"}` : "") +
+    (conv.qualificacao?.abordagem ? `\nCOMO A CONVERSA COMEÇOU: o cliente se cadastrou na página "${conv.qualificacao.abordagem.pagina || "diagnóstico"}" e NÓS mandamos a 1ª mensagem: "${conv.qualificacao.abordagem.texto}". Respostas do cadastro: ${conv.qualificacao.abordagem.resumo || "-"}. Continue a partir da resposta dele, sem se reapresentar e sem perguntar de novo o que ele já respondeu no cadastro.` : "") +
     (conv.ia_fase === "agendado" && conv.agenda_inicio ? `\nJÁ AGENDADO para ${new Date(conv.agenda_inicio).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}${conv.agenda_link ? " · " + conv.agenda_link : ""}` : "");
 }
 
@@ -566,7 +587,7 @@ async function rodarIA(convId: string, msgId: string, fone: string, nome: string
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (ultima?.id !== msgId) return;
 
-  const { data: conv } = await sb.from("conversations").select("ia_ativa, ia_pausada_ate, ia_fase, anuncio, agenda_inicio, agenda_link, funil").eq("id", convId).single();
+  const { data: conv } = await sb.from("conversations").select("ia_ativa, ia_pausada_ate, ia_fase, anuncio, agenda_inicio, agenda_link, funil, qualificacao").eq("id", convId).single();
   if (!conv || conv.ia_ativa === false) return;
   if (conv.ia_pausada_ate && new Date(conv.ia_pausada_ate) > new Date()) return;
 
@@ -676,7 +697,7 @@ function repetiu(texto: string, anteriores: string[]): boolean {
 
 async function processarFups() {
   const { data: vencidos } = await sb.from("conversations")
-    .select("id, fup_n, fup_proximo_em, ia_ativa, ia_pausada_ate, ia_fase, anuncio, agenda_inicio, agenda_link, last_inbound_at, funil, contacts(phone, full_name)")
+    .select("id, fup_n, fup_proximo_em, ia_ativa, ia_pausada_ate, ia_fase, anuncio, agenda_inicio, agenda_link, last_inbound_at, funil, qualificacao, contacts(phone, full_name)")
     .eq("channel", "oficial").lte("fup_proximo_em", new Date().toISOString()).limit(15);
   let enviados = 0;
   for (const c of vencidos || []) {
@@ -777,6 +798,57 @@ async function enviarDoCrm(messageId: string) {
   return { ok: true };
 }
 
+// ---------------------------------------------------------------- abordagem ativa (lead de página que não agendou)
+// O n8n chama com {acao:"abordar", fone, nome, template, texto, pagina, resumo}. Manda o modelo aprovado pelo
+// número oficial, grava a mensagem no CRM e deixa o contexto pra IA continuar quando o lead responder.
+async function abordar(b: any) {
+  let fone = digits(b.fone);
+  if (fone.length === 10 || fone.length === 11) fone = "55" + fone;
+  if (fone.length < 12) return { ok: false, erro: "telefone inválido" };
+  const nome = String(b.nome || "").trim() || null;
+  const primeiro = (nome || "").split(/\s+/)[0] || "";
+  const primeiroFmt = primeiro ? primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase() : "tudo bem";
+  const template = String(b.template || "");
+  if (!template) return { ok: false, erro: "template obrigatório" };
+  const texto = String(b.texto || "").replace(/\{\{1\}\}/g, primeiroFmt);
+
+  const { conv } = await garantirConversa(fone, nome, null);
+  const { data: atual } = await sb.from("conversations").select("ia_fase, last_inbound_at, qualificacao").eq("id", conv.id).single();
+  if (["agendado", "sem_interesse"].includes(atual?.ia_fase)) return { ok: true, pulado: atual?.ia_fase };
+  const env = await waEnviarTemplate(fone, template, String(b.idioma || "pt_BR"), [primeiroFmt]);
+  if (!env.ok) return { ok: false, erro: env.erro };
+  await sb.from("messages").insert({
+    conversation_id: conv.id, direction: "outbound", ig_message_id: env.wamid, sender_id: "reino",
+    text: texto, raw: { por: "abordagem", template, pagina: b.pagina || null },
+  });
+  const q = { ...(atual?.qualificacao || {}), abordagem: { texto, pagina: b.pagina || null, resumo: b.resumo || null, em: new Date().toISOString() } };
+  await sb.from("conversations").update({
+    qualificacao: q, ia_contexto_desde: new Date(Date.now() - 5000).toISOString(), ia_fase: "novo", is_archived: false,
+  }).eq("id", conv.id);
+  return { ok: true, wamid: env.wamid, conversation_id: conv.id };
+}
+
+async function wabaId() { return (await config("oficial_waba_id")) || "1707945417028823"; }
+async function criarTemplate(b: any) {
+  const token = await secret("WA_TOKEN", "wa_oficial_token");
+  const r = await fetch(`${GRAPH}/${await wabaId()}/message_templates`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: b.nome, language: b.idioma || "pt_BR", category: b.categoria || "UTILITY",
+      components: [{ type: "BODY", text: b.corpo, ...(b.exemplo ? { example: { body_text: [b.exemplo] } } : {}) }],
+    }),
+  });
+  return { status: r.status, resposta: await r.json().catch(() => ({})) };
+}
+async function statusTemplate(nome: string) {
+  const token = await secret("WA_TOKEN", "wa_oficial_token");
+  const r = await fetch(`${GRAPH}/${await wabaId()}/message_templates?name=${encodeURIComponent(nome)}&fields=name,status,category,language,rejected_reason`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return { status: r.status, resposta: await r.json().catch(() => ({})) };
+}
+
 // ---------------------------------------------------------------- servidor
 Deno.serve(async (req) => {
   const url = new URL(req.url);
@@ -796,10 +868,13 @@ Deno.serve(async (req) => {
   try { body = JSON.parse(raw); } catch (_) { return json({ ok: false, erro: "json inválido" }, 400); }
 
   // chamadas internas (gatilho do banco / pg_cron)
-  if (body?.acao === "enviar" || body?.acao === "fup" || body?.acao === "capi" || body?.acao === "retomar") {
+  if (["enviar", "fup", "capi", "retomar", "abordar", "template_criar", "template_status"].includes(body?.acao)) {
     const interno = await secret("WA_INTERNAL_SECRET", "wa_oficial_internal");
     if (!interno || req.headers.get("x-reino-secret") !== interno) return json({ ok: false }, 401);
     if (body.acao === "fup") return json(await processarFups());
+    if (body.acao === "abordar") return json(await abordar(body));
+    if (body.acao === "template_criar") return json(await criarTemplate(body));
+    if (body.acao === "template_status") return json(await statusTemplate(String(body.nome || "")));
     if (body.acao === "retomar") {
       const lista = await pendentesSemResposta(body.desde ? String(body.desde) : undefined);
       if (body.so_listar) return json({ ok: true, total: lista.length, lista });
