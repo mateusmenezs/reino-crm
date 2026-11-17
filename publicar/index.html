@@ -2384,7 +2384,7 @@ function EsteiraFunil({sel,setSel}){
   },[dias,de,ate,sel]);
   var loaded=!!(stats&&!stats.erro);
   var dd=loaded?stats:{};
-  var calls=Math.max(0,(dd.agend||0)-(dd.noshow||0)-(dd.desq||0));
+  var calls=(dd.realizadas!=null)?Number(dd.realizadas):Math.max(0,(dd.agend||0)-(dd.noshow||0)-(dd.desq||0));
   var maxV=Math.max(1,dd.leads||0,dd.abordados||0,dd.fups||0,dd.agend||0,calls,dd.vendas||0,dd.fora||0);
   var steps=[["Leads",dd.leads||0,"var(--gold)"],["Abordados",dd.abordados||0,"var(--gold)"],["Em follow-up",dd.fups||0,"var(--gold)"],["Agendamentos",dd.agend||0,"var(--gold)"],["Calls feitas",calls,"var(--gold)"],["Vendas",dd.vendas||0,"#059669"],["Fora",dd.fora||0,"#9CA3AF"]];
   var perBtn=function(val,label){ return h("button",{key:String(val),className:"subtab"+(dias===val?" active":""),onClick:function(){setDias(val);}},label); };
@@ -2439,11 +2439,13 @@ function Dashboard({onToast,email}){
     var vd=await sb.from("conversations").select("deal_value,venda_em,closer,recebido_venda").not("venda_em","is",null).gte("venda_em",ms);
     var v7=await sb.from("conversations").select("deal_value").not("venda_em","is",null).gte("venda_em",d7);
     var v30=await sb.from("conversations").select("deal_value").not("venda_em","is",null).gte("venda_em",d30);
-    var cl=await sb.from("conversations").select("id",{count:"exact",head:true}).not("call_em","is",null).gte("call_em",ms);
+    var cl=await sb.from("conversations").select("call_status,agenda_inicio,kanban_stages(name)").not("agenda_inicio","is",null).gte("agenda_inicio",ms).lte("agenda_inicio",now.toISOString());
     var pg=await sb.from("fin_pagamentos").select("valor,fin_lancamentos(tipo)").gte("data_pagamento",f1).lt("data_pagamento",f2);
     var lc=await sb.from("fin_lancamentos").select("valor").eq("tipo","receber").gte("competencia",f1).lt("competencia",f2);
     var cc=await sb.from("closer_comissao").select("nome,pct");
     var vendas=(vd.data||[]).length;
+    var recebidoVendasMes=(vd.data||[]).reduce(function(a,r){return a+(Number(r.recebido_venda)||0);},0);
+    var mesCalls=(cl.data||[]).filter(function(r){ var st=r.kanban_stages&&r.kanban_stages.name; var cs=r.call_status||""; return cs!=="no_show"&&cs!=="desqualificado"&&st!=="FUP4"&&st!=="Desqualificado (pré-venda)"; }).length;
     var contratado=(vd.data||[]).reduce(function(a,r){return a+(Number(r.deal_value)||0);},0);
     var contratado7=(v7.data||[]).reduce(function(a,r){return a+(Number(r.deal_value)||0);},0);
     var contratado30=(v30.data||[]).reduce(function(a,r){return a+(Number(r.deal_value)||0);},0);
@@ -2456,8 +2458,8 @@ function Dashboard({onToast,email}){
     var porCloser=Object.keys(porCloserO).map(function(k){return porCloserO[k];}).sort(function(a,b){return b.contratado-a.contratado;});
     setMes({vendas:vendas,contratado:contratado,contratado7:contratado7,contratado30:contratado30,vendas7:vendas7,vendas30:vendas30,caixa:caixa,dre:dre,
       comissoes:comissoes,liquido:contratado-comissoes,porCloser:porCloser,
-      ticketDre:vendas?Math.round(dre/vendas):0, ticketCaixa:vendas?Math.round(caixa/vendas):0,
-      calls:cl.count||0});
+      ticketDre:vendas?Math.round(contratado/vendas):0, ticketCaixa:vendas?Math.round(recebidoVendasMes/vendas):0,
+      calls:mesCalls});
   })().catch(function(e){}); },[isMateus]);
   useEffect(function(){ if(!isMateus)return; (async function(){
     var now=new Date(); var start=new Date(now.getFullYear(),now.getMonth(),now.getDate(),0,0,0).toISOString();
