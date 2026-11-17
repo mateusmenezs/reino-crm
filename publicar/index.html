@@ -1879,7 +1879,8 @@ function RotinaView({session,onToast,isAdmin}){
     if(active==="rotina"){ var ordem=(fixas||[]).reduce(function(m,x){return Math.max(m,x.ordem||0);},0)+1; var r=await sb.from("rotina_itens").insert([{user_id:uid,titulo:t,ordem:ordem}]); if(r.error)return onToast("Erro: "+r.error.message); load(); return; }
     var alvo=para||uid, ehOutro=alvo!==uid;
     var lid = ehOutro?null:(isUuidStr(active)?active:null);
-    var row={user_id:alvo,titulo:t,done:false,status:"pendente",prioridade:prioN,prazo:prazoN||null,lista_id:lid,sapo:(!ehOutro&&sapoN),sapo_dia:(!ehOutro&&sapoN)?hoje:null,de_nome:ehOutro?meuNome:null};
+    // Criada dentro do "Plano do dia" sem prazo → entra pra hoje (senão cai na Entrada e some da tela).
+    var row={user_id:alvo,titulo:t,done:false,status:"pendente",prioridade:prioN,prazo:prazoN||(active==="plano"?hoje:null),lista_id:lid,sapo:(!ehOutro&&sapoN),sapo_dia:(!ehOutro&&sapoN)?hoje:null,de_nome:ehOutro?meuNome:null};
     var r2=await sb.from("tarefas_avulsas").insert([row]); if(r2.error)return onToast("Erro: "+r2.error.message);
     setPrazoN(""); setSapoN(false);
     if(ehOutro){ var nm=(team.find(function(m){return m.id===alvo;})||{}).full_name||"a pessoa"; onToast("Tarefa enviada pra "+nm+" ✓"); setPara(uid); }
@@ -3542,8 +3543,8 @@ function Shell({session}){
   var GROUPS=[
     ["Hoje",[["painel","Painel"]],"comercial"],
     ["Comercial",[["conversas","Conversas"],["total","Pipeline"],["agenda","Agenda"],["contatos","Contatos"],["playbooks","Playbooks ↗"]],"comercial"],
-    ["Entrega",[["clientes","Clientes"]],"comercial"],
     ["Meu dia",[["rotinacris","Rotina do dia"],["rotina","Minhas tarefas"]],"gestao"],
+    ["Entrega",[["clientes","Clientes"]],"gestao"], // 17/11: entrega/clientes saiu do Comercial e foi pra Gestão (Mateus)
     ["Gestão",[["relatorio","Desempenho"],["time","Time"]],"gestao"]
   ];
   if(isGestor) GROUPS=[["Meu dia",[["rotina","Minhas tarefas"]],"gestao"],["Entrega",[["clientes","Clientes"]],"gestao"]];
