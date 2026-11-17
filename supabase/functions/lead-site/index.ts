@@ -24,6 +24,8 @@ const FUNIS: Record<string, { pixel: string; aplicou: string; qualifica: (receit
     qualifica: (r) => !["ate-5k", "5k-10k"].includes(r), // 10k+
   },
 };
+// Mini Evento · teste ABC de headline (17/11/2026): /mini-evento/a|b|c/ — mesma regra do Agenda Lotada
+for (const v of ["a", "b", "c"]) FUNIS["diagnostico-mini-evento-" + v] = { ...FUNIS["diagnostico-agenda-lotada-bf"] };
 const NAO_REGISTRAR = ["5511988887777"]; // número de teste antigo
 
 const CORS = {
