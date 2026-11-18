@@ -177,19 +177,21 @@ function render(){
       + '<div class="gajuda">Agendadas e conduzidas pelo time Reino. Status atualizado automaticamente.</div><div class="list">';
     STATE.calls.forEach(function(cl){
       var meta = "com "+esc(cl.responsavel||"time Reino");
+      var done = cl.feita || cl.status==="feita" || cl.status==="confirmar";
       var right="";
-      if(cl.status==="feita"){
+      if(done){
         right = '<div class="badge b-feita">Feita ✓</div>';
       } else if(cl.status==="agendada"){
         right = '<div class="badge b-agendada">'+(cl.inicio?("Agendada "+esc(fmtData(cl.inicio))):"Agendada")+'</div>';
         if(cl.meet_link) meta += ' · <a class="metalink" href="'+esc(cl.meet_link)+'" target="_blank" rel="noopener">entrar no Meet</a>';
-      } else { // a_agendar
+      } else { // pendente ou nao_aconteceu
+        var remarcar = cl.status==="nao_aconteceu";
         if(cl.ordem===1){ right = '<div class="badge b-aagendar">No briefing</div>'; meta += ' · sai agendada no fim do briefing'; }
-        else if(cl.tem_agenda){ right = '<a class="btnag" href="'+AGENDAR_CALL_URL+'?c='+encodeURIComponent(C)+'&ordem='+cl.ordem+'" target="_blank" rel="noopener">Agendar</a>'; }
-        else { right = '<div class="badge b-aagendar">A agendar</div>'; meta += ' · o time marca com você'; }
+        else if(cl.tem_agenda){ right = '<a class="btnag" href="'+AGENDAR_CALL_URL+'?c='+encodeURIComponent(C)+'&ordem='+cl.ordem+'" target="_blank" rel="noopener">'+(remarcar?"Remarcar":"Agendar")+'</a>'; }
+        else { right = '<div class="badge b-aagendar">'+(remarcar?"Remarcar":"A agendar")+'</div>'; meta += ' · o time marca com você'; }
       }
-      html += '<div class="call'+(cl.status==="feita"?' feita':'')+'">'
-        + '<div class="cnum">'+(cl.status==="feita"?'✓':cl.ordem)+'</div>'
+      html += '<div class="call'+(done?' feita':'')+'">'
+        + '<div class="cnum">'+(done?'✓':cl.ordem)+'</div>'
         + '<div class="cbody"><div class="ctit">'+esc(cl.titulo)+'</div><div class="cmeta">'+meta+'</div></div>'
         + right+'</div>';
     });
