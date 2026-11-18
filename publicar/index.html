@@ -2685,17 +2685,17 @@ function OnboardingView({onToast}){
     setRows(convs.map(function(c){ var mi=mmap[c.id]||{}; return {conv:c,_m:mi,trafego:!!mi.is_trafego,mensal:isMensal(c),produto:c.produto||"—",calls:(callmap[c.id]||[]).sort(function(a,b){return a.ordem-b.ordem;}),passos:pmap[c.id]||[]}; }));
   },[]);
   useEffect(function(){load();},[load]);
-  var STAGES=["Venda","Form de contrato","Contrato enviado","Contrato assinado","Briefing","Call de Plano de Ação","Executando primeiros passos","Call comercial","Execução do teste","Criação de estrutura","Concluído"];
-  var CORES={"Venda":"#22C55E","Form de contrato":"#3B101D","Contrato enviado":"#F59E0B","Contrato assinado":"#059669","Briefing":"#0EA5E9","Call de Plano de Ação":"#FF4D00","Executando primeiros passos":"#D97706","Call comercial":"#F59E0B","Execução do teste":"#0EA5E9","Criação de estrutura":"#8B5CF6","Concluído":"#059669"};
+  var STAGES=["Venda","Form de contrato","Contrato enviado","Contrato assinado","Briefing","Estratégia","Executando primeiros passos","Teste de temas","Criação de funil","Comercial","Concluído"];
+  var CORES={"Venda":"#22C55E","Form de contrato":"#3B101D","Contrato enviado":"#F59E0B","Contrato assinado":"#059669","Briefing":"#0EA5E9","Estratégia":"#FF4D00","Executando primeiros passos":"#D97706","Teste de temas":"#F59E0B","Criação de funil":"#0EA5E9","Comercial":"#8B5CF6","Concluído":"#059669"};
   function callByOrdem(x,o){ for(var i=0;i<(x.calls||[]).length;i++){ if(x.calls[i].ordem===o)return x.calls[i]; } return null; }
   function currentCall(x){ for(var i=0;i<(x.calls||[]).length;i++){ if(!x.calls[i].feita_em)return x.calls[i]; } return null; }
   function stage(x){
     var c=x.conv, c1=callByOrdem(x,1),c2=callByOrdem(x,2),c3=callByOrdem(x,3),c4=callByOrdem(x,4);
     if(c4&&c4.feita_em)return "Concluído";
-    if(c3&&c3.feita_em)return "Criação de estrutura";
-    if(c2&&c2.feita_em)return "Execução do teste";
-    if(c1&&c1.feita_em){ var ps=x.passos||[]; if(ps.length>0&&ps.filter(function(p){return !p.feito_em;}).length>0)return "Executando primeiros passos"; return "Call comercial"; }
-    if(c.contrato_assinado_em){ if(c.briefing_ok_em)return "Call de Plano de Ação"; if(c.briefing_enviado_em)return "Briefing"; return "Contrato assinado"; }
+    if(c3&&c3.feita_em)return "Comercial";
+    if(c2&&c2.feita_em)return "Criação de funil";
+    if(c1&&c1.feita_em){ var ps=x.passos||[]; if(ps.length>0&&ps.filter(function(p){return !p.feito_em;}).length>0)return "Executando primeiros passos"; return "Teste de temas"; }
+    if(c.contrato_assinado_em){ if(c.briefing_ok_em)return "Estratégia"; if(c.briefing_enviado_em)return "Briefing"; return "Contrato assinado"; }
     if(c.contrato_enviado_em||c.form_contrato_ok_em)return "Contrato enviado";
     if(c.form_contrato_enviado_em)return "Form de contrato";
     return "Venda";
@@ -2738,7 +2738,7 @@ function OnboardingView({onToast}){
     if(st==="Concluído")return "1º mês concluído ✅";
     if(st==="Executando primeiros passos"){ var ps=x.passos||[]; return ps.filter(function(p){return p.feito_em;}).length+"/"+ps.length+" passos feitos"; }
     var cur=currentCall(x);
-    if((st==="Call de Plano de Ação"||st==="Call comercial"||st==="Execução do teste"||st==="Criação de estrutura")&&cur){ var s=(cur.status==="agendada"&&cur.inicio)?("agendada "+fmtDateBR(cur.inicio)):cur.status==="agendada"?"agendada":"a agendar"; return s+" · "+cur.responsavel; }
+    if((st==="Estratégia"||st==="Teste de temas"||st==="Criação de funil"||st==="Comercial")&&cur){ var s=(cur.status==="agendada"&&cur.inicio)?("agendada "+fmtDateBR(cur.inicio)):cur.status==="agendada"?"agendada":"a agendar"; return s+" · "+cur.responsavel; }
     var d=diasDe(refTs(x,st)); return d!=null?("parado há "+d+"d"):"agora";
   }
   return h(Fr,null,
@@ -2839,7 +2839,7 @@ function OnbModal({x,onClose,onToast,reload}){
             )
           );
         }),
-        h("div",{style:secLbl},"Primeiros passos (pós Call de Plano de Ação)"),
+        h("div",{style:secLbl},"Primeiros passos (pós Estratégia)"),
         passos.length===0&&h("div",{style:{fontSize:12,color:"var(--muted)"}},"Nenhum passo registrado. Adicione as tarefas que o cliente tem que executar."),
         passos.map(function(p){ var done=!!p.feito_em;
           return h("div",{key:p.id,style:{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid var(--line)"}},
@@ -2873,8 +2873,8 @@ function EntregaView({onToast}){
   const [rows,setRows]=useState(null);
   const [sel,setSel]=useState(null);
   const [fProd,setFProd]=useState("Todos"),[fTipo,setFTipo]=useState("Todos");
-  const COLS=["Call estratégica","Call comercial","Execução do teste","Criação de estrutura","Concluído"];
-  const CORES={"Call estratégica":"#3B101D","Call comercial":"#F59E0B","Execução do teste":"#0EA5E9","Criação de estrutura":"#8B5CF6","Concluído":"#059669"};
+  const COLS=["Estratégia","Teste de temas","Criação de funil","Comercial","Concluído"];
+  const CORES={"Estratégia":"#3B101D","Teste de temas":"#F59E0B","Criação de funil":"#0EA5E9","Comercial":"#8B5CF6","Concluído":"#059669"};
   function isMensal(c){ if(typeof c.mensal==="boolean")return c.mensal; var fp=((c.forma_pagamento||"")+"").toLowerCase(); if(fp.indexOf("boleto")>=0)return true; var pl=c.pgto_plano; if(Array.isArray(pl)&&pl.length>=2){ var pend=pl.filter(function(p){return p&&p.pago!==true;}).length; return pend>=1; } return false; }
   const load=useCallback(async function(){
     var ec=await sb.from("entrega_calls").select("*").order("ordem");
