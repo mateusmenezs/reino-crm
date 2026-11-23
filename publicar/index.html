@@ -3447,17 +3447,65 @@ function ConversasView({search,account,userId,onToast}){
    Campos: Nome (contacts.full_name), Instagram/Nicho/Objetivo (conversations.briefing_*),
    Produto (conversations.produto). Enquanto o briefing não roda, briefing_* ficam nulos:
    Instagram cai pro @ do mentorado se houver; nicho/objetivo mostram "—". */
+/* Painel de entrega do time: confirmar call + marcar entregáveis (RPCs do banco).
+   Abre ao clicar num cliente. Ao marcar, o CRM avança a fase sozinho (Jornada posicional). */
+function PainelEntrega({conv,nome,meuNome,onToast,onClose,onChange}){
+  const [calls,setCalls]=useState(null);
+  const [itens,setItens]=useState({});
+  const [busy,setBusy]=useState(false);
+  const load=useCallback(async function(){
+    var rs=await sb.from("entrega_calls_resumo").select("*").eq("conversation_id",conv).order("ordem");
+    var cs=rs.data||[]; var ids=cs.map(function(c){return c.call_id;}); var by={};
+    if(ids.length){ var it=await sb.from("entrega_call_itens").select("id,call_id,ordem,item,feito,feito_em,feito_por").in("call_id",ids).order("ordem"); (it.data||[]).forEach(function(i){ (by[i.call_id]=by[i.call_id]||[]).push(i); }); }
+    setCalls(cs); setItens(by);
+  },[conv]);
+  useEffect(function(){load();},[load]);
+  async function confirmar(c,acont){ setBusy(true); var r=await sb.rpc("entrega_confirmar_call",{p_call:c.call_id,p_aconteceu:acont,p_por:meuNome}); setBusy(false); if(r.error){onToast&&onToast("Erro: "+r.error.message);return;} onToast&&onToast(acont?"Call confirmada ✓":"Marcada: não aconteceu"); await load(); onChange&&onChange(); }
+  async function marcar(it){ var novo=!it.feito; setBusy(true); var r=await sb.rpc("entrega_marcar_item",{p_item:it.id,p_feito:novo,p_por:meuNome}); setBusy(false); if(r.error){onToast&&onToast("Erro: "+r.error.message);return;} await load(); onChange&&onChange(); }
+  var stLabel=function(s){return s==="feita"?"Feita ✓":s==="confirmar"?"Aconteceu? confirmar":s==="agendada"?"Agendada":s==="nao_aconteceu"?"Não aconteceu":"A agendar";};
+  var stColor=function(s){return s==="feita"?"#16A34A":s==="confirmar"?"#2563EB":s==="agendada"?"#B45309":s==="nao_aconteceu"?"#DC2626":"var(--muted)";};
+  return h("div",{className:"overlay",onClick:onClose},
+    h("div",{className:"modal",style:{maxWidth:560},onClick:function(e){e.stopPropagation();}},
+      h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:4}},
+        h("h3",{style:{margin:0}},"📋 "+(nome||"Cliente")),
+        h("button",{className:"btn ghost sm",onClick:onClose},"Fechar")),
+      h("div",{style:{fontSize:12,color:"var(--muted)",marginBottom:4}},"Entrega do 1º mês · confirme a call e marque o que foi entregue. A fase avança sozinha."),
+      calls===null?h("div",{className:"center",style:{height:120}},h("div",{className:"spin"})):
+      calls.map(function(c){ var done=c.status==="feita"; var its=itens[c.call_id]||[];
+        return h("div",{key:c.call_id,style:{background:"var(--bg)",border:"1px solid var(--line)",borderRadius:12,padding:"11px 12px",marginTop:10}},
+          h("div",{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},
+            h("span",{style:{width:24,height:24,borderRadius:"50%",background:done?"#16A34A":"var(--link)",color:"#fff",fontWeight:800,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},done?"✓":c.ordem),
+            h("div",{style:{fontWeight:800,fontSize:13.5}},c.titulo),
+            h("span",{style:{marginLeft:"auto",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,color:stColor(c.status)}},stLabel(c.status)),
+            c.responsavel&&h("div",{style:{fontSize:11,color:"var(--muted)",width:"100%"}},"com "+c.responsavel+(c.inicio?" · "+fmtDateBR(c.inicio):""))),
+          c.status==="confirmar"&&h("div",{style:{display:"flex",gap:7,marginTop:8}},
+            h("button",{className:"btn sm",disabled:busy,style:{background:"#16A34A",color:"#fff",border:0},onClick:function(){confirmar(c,true);}},"✅ Aconteceu"),
+            h("button",{className:"btn sm",disabled:busy,style:{background:"#DC2626",color:"#fff",border:0},onClick:function(){confirmar(c,false);}},"❌ Não aconteceu")),
+          its.length>0&&h("div",{style:{marginTop:8,borderTop:"1px solid var(--line)"}},
+            its.map(function(it){ return h("div",{key:it.id,onClick:function(){if(!busy)marcar(it);},style:{display:"flex",gap:9,alignItems:"flex-start",padding:"8px 2px",cursor:busy?"default":"pointer",borderTop:"1px solid var(--line)"}},
+              h("span",{style:{width:20,height:20,borderRadius:6,flexShrink:0,marginTop:1,border:"2px solid "+(it.feito?"#16A34A":"var(--line)"),background:it.feito?"#16A34A":"transparent",color:"#fff",fontSize:13,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}},it.feito?"✓":""),
+              h("div",{style:{minWidth:0}},h("div",{style:{fontSize:13,color:it.feito?"var(--muted)":"var(--ink)",textDecoration:it.feito?"line-through":"none"}},it.item),
+                it.feito&&it.feito_por&&h("div",{style:{fontSize:10.5,color:"var(--muted)"}},"✓ "+it.feito_por+(it.feito_em?" · "+fmtDateBR(it.feito_em):"")))); })))
+      })
+    )
+  );
+}
 function ClientesEntregaView({modo,onToast}){
   const [rows,setRows]=useState(null);
+  const [sel,setSel]=useState(null);
+  const [meuNome,setMeuNome]=useState("time");
+  useEffect(function(){ (async function(){ try{ var s=await sb.auth.getSession(); var uid=s&&s.data&&s.data.session&&s.data.session.user&&s.data.session.user.id; if(uid){ var m=await sb.from("team_members").select("full_name").eq("id",uid).maybeSingle(); if(m.data&&m.data.full_name)setMeuNome(m.data.full_name); } }catch(e){} })(); },[]);
   const load=useCallback(async function(){
     var r=await convsEntrega(function(){ return sb.from("conversations").select("id,produto,venda_em,briefing_instagram,briefing_nicho,briefing_objetivo,contacts(full_name)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false}); });
     var convs=r.data||[]; var ids=convs.map(function(c){return c.id;});
-    var c2={},igm={};
+    var c2={},igm={},ent={};
     try{ if(ids.length){
       var ec=await sb.from("entrega_calls").select("conversation_id,ordem,feita_em").eq("ordem",2).in("conversation_id",ids);
       (ec.data||[]).forEach(function(x){ if(x.feita_em)c2[x.conversation_id]=true; });
       var mm=await sb.from("mentorados").select("source_conversation_id,instagram").in("source_conversation_id",ids);
       (mm.data||[]).forEach(function(m){ if(m.source_conversation_id&&m.instagram)igm[m.source_conversation_id]=m.instagram; });
+      var rs=await sb.from("entrega_calls_resumo").select("conversation_id,status,itens_total,itens_feitos").in("conversation_id",ids);
+      (rs.data||[]).forEach(function(x){ var e=ent[x.conversation_id]||(ent[x.conversation_id]={feitas:0,itot:0,ifeito:0}); if(x.status==="feita")e.feitas++; e.itot+=Number(x.itens_total)||0; e.ifeito+=Number(x.itens_feitos)||0; });
     } }catch(e){}
     setRows(convs.map(function(c){ return {
       id:c.id,
@@ -3466,7 +3514,8 @@ function ClientesEntregaView({modo,onToast}){
       instagram:c.briefing_instagram||igm[c.id]||"",
       nicho:c.briefing_nicho||"",
       objetivo:c.briefing_objetivo||"",
-      call2:!!c2[c.id]
+      call2:!!c2[c.id],
+      ent:ent[c.id]||{feitas:0,itot:0,ifeito:0}
     }; }));
   },[]);
   useEffect(function(){load();},[load]);
@@ -3477,26 +3526,28 @@ function ClientesEntregaView({modo,onToast}){
   var campo=function(lbl,val,ehIg){ var t=em(val);
     return h("div",{style:{display:"flex",gap:6,fontSize:12.5,lineHeight:1.55}},
       h("span",{style:{color:"var(--muted)",fontWeight:700,minWidth:74,flexShrink:0}},lbl),
-      t?(ehIg?h("a",{href:"https://instagram.com/"+igClean(t),target:"_blank",rel:"noopener",style:{color:"var(--link)",fontWeight:600,textDecoration:"none",wordBreak:"break-word"}},"@"+igClean(t)):h("span",{style:{color:"var(--ink)",wordBreak:"break-word"}},t))
+      t?(ehIg?h("a",{href:"https://instagram.com/"+igClean(t),target:"_blank",rel:"noopener",onClick:function(e){e.stopPropagation();},style:{color:"var(--link)",fontWeight:600,textDecoration:"none",wordBreak:"break-word"}},"@"+igClean(t)):h("span",{style:{color:"var(--ink)",wordBreak:"break-word"}},t))
        :h("span",{style:{color:"var(--muted)"}},"—"));
   };
   var vazio=modo==="execucao"?"Nenhum cliente em execução ainda — eles entram aqui quando a Call 2 é marcada como feita.":"Nenhum cliente em onboarding no momento.";
   return h(Fr,null,
     h("div",{style:{padding:"4px 20px 0",fontSize:12.5,color:"var(--muted)"}},
       modo==="execucao"?"Clientes que já passaram da Call 2 — em execução. ":"Clientes da venda até o fim da Call 2 — em onboarding. ",
-      h("b",null,vis.length+" cliente(s)"),"."),
+      h("b",null,vis.length+" cliente(s)"),". ",h("span",{style:{color:"var(--link)",fontWeight:700}},"Clique num cliente pra confirmar a call e marcar os entregáveis.")),
     vis.length===0
       ? h("div",{className:"empty",style:{padding:"28px 20px",color:"var(--muted)"}},vazio)
       : h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(258px,1fr))",gap:12,padding:"14px 20px 28px"}},
-          vis.map(function(x){ return h("div",{key:x.id,style:{background:"var(--card)",border:"1px solid var(--line)",borderRadius:14,padding:"13px 15px"}},
+          vis.map(function(x){ return h("div",{key:x.id,onClick:function(){setSel(x);},style:{background:"var(--card)",border:"1px solid var(--line)",borderRadius:14,padding:"13px 15px",cursor:"pointer"}},
             h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:9}},
               h("div",{style:{fontWeight:800,fontSize:14.5,color:"var(--ink)",minWidth:0,wordBreak:"break-word"}},x.nome),
               h("span",{style:{fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,color:"var(--link)",background:"var(--bg)",border:"1px solid var(--line)",borderRadius:999,padding:"3px 9px",whiteSpace:"nowrap",flexShrink:0}},x.produto)),
             campo("Instagram",x.instagram,true),
             campo("Nicho",x.nicho),
-            campo("Objetivo",x.objetivo)
+            campo("Objetivo",x.objetivo),
+            h("div",{style:{marginTop:9,paddingTop:8,borderTop:"1px solid var(--line)",fontSize:11.5,color:"var(--muted)",fontWeight:700}},"✅ calls "+x.ent.feitas+"/4 · entregáveis "+x.ent.ifeito+"/"+x.ent.itot)
           ); })
-        )
+        ),
+    sel&&h(PainelEntrega,{conv:sel.id,nome:sel.nome,meuNome:meuNome,onToast:onToast,onClose:function(){setSel(null);},onChange:load})
   );
 }
 function ClientesView({search,onToast,isAdmin,isGestor}){
