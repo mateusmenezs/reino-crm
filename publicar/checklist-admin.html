@@ -182,7 +182,7 @@ function render(){
       +'<div class="grow"><div class="nm">'+esc(x.nome)+'</div>'
       +'<div class="rmeta"><span class="pill">'+esc(x.produto)+'</span>'
       +'<span class="phase '+(x.atual===null?"ph-exe":"ph-onb")+'">'+(x.atual===null?"Jornada completa":"Fase "+x.atual+" · "+esc(x.atualTit))+'</span>'
-      +(e?'<span>· calls '+e.feitas+'/4 · entregáveis '+e.itensFeitos+'/'+e.itensTotal+'</span>':'')
+      +(e?'<span>· calls '+e.feitas+'/'+e.calls.length+' · entregáveis '+e.itensFeitos+'/'+e.itensTotal+'</span>':'')
       +'</div><div class="fases">'+fz+'</div>'
       +(x.pendentes.length?'<div class="pend">Falta: '+esc(x.pendentes.join(" · "))+'</div>':'')
       +(dots?'<div class="dots" style="justify-content:flex-start;margin-top:5px">'+dots+'</div>':'')+'</div>'

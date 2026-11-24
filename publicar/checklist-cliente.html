@@ -201,7 +201,9 @@ function callHTML(cl){
   return '<div class="item'+(done?' done':'')+'">'
     + '<div class="cnum">'+(done?'✓':cl.ordem)+'</div>'
     + '<div class="ibody"><div class="ilabel">Call '+cl.ordem+' — '+esc(cl.label)+'</div>'
-    + '<div class="ihelp">'+meta+'</div>'+badge+acao+'</div></div>';
+    + '<div class="ihelp"><b>'+meta+'</b></div>'
+    + (cl.help? '<div class="ihelp">'+esc(cl.help)+'</div>' : '')
+    + badge+acao+'</div></div>';
 }
 
 function render(){

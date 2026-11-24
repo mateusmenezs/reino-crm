@@ -2688,16 +2688,15 @@ function OnboardingView({onToast}){
     setRows(convs.map(function(c){ var mi=mmap[c.id]||{}; return {conv:c,_m:mi,trafego:!!mi.is_trafego,mensal:isMensal(c),produto:c.produto||"—",calls:(callmap[c.id]||[]).sort(function(a,b){return a.ordem-b.ordem;}),passos:pmap[c.id]||[]}; }));
   },[]);
   useEffect(function(){load();},[load]);
-  var STAGES=["Venda","Form de contrato","Contrato enviado","Contrato assinado","Briefing","Estratégia","Executando primeiros passos","Teste de temas","Criação de funil","Comercial","Concluído"];
-  var CORES={"Venda":"#22C55E","Form de contrato":"#8A8A8A","Contrato enviado":"#F59E0B","Contrato assinado":"#059669","Briefing":"#0EA5E9","Estratégia":"#E21B2D","Executando primeiros passos":"#D97706","Teste de temas":"#F59E0B","Criação de funil":"#0EA5E9","Comercial":"#8B5CF6","Concluído":"#059669"};
+  var STAGES=["Venda","Form de contrato","Contrato enviado","Contrato assinado","Briefing","Estratégia","Executando primeiros passos","Teste de temas rodando","Comercial","Concluído"];
+  var CORES={"Venda":"#22C55E","Form de contrato":"#8A8A8A","Contrato enviado":"#F59E0B","Contrato assinado":"#059669","Briefing":"#0EA5E9","Estratégia":"#E21B2D","Executando primeiros passos":"#D97706","Teste de temas rodando":"#F59E0B","Comercial":"#8B5CF6","Concluído":"#059669"};
   function callByOrdem(x,o){ for(var i=0;i<(x.calls||[]).length;i++){ if(x.calls[i].ordem===o)return x.calls[i]; } return null; }
   function currentCall(x){ for(var i=0;i<(x.calls||[]).length;i++){ if(!x.calls[i].feita_em)return x.calls[i]; } return null; }
   function stage(x){
-    var c=x.conv, c1=callByOrdem(x,1),c2=callByOrdem(x,2),c3=callByOrdem(x,3),c4=callByOrdem(x,4);
-    if(c4&&c4.feita_em)return "Concluído";
-    if(c3&&c3.feita_em)return "Comercial";
-    if(c2&&c2.feita_em)return "Criação de funil";
-    if(c1&&c1.feita_em){ var ps=x.passos||[]; if(ps.length>0&&ps.filter(function(p){return !p.feito_em;}).length>0)return "Executando primeiros passos"; return "Teste de temas"; }
+    var c=x.conv, c1=callByOrdem(x,1),c2=callByOrdem(x,2),c3=callByOrdem(x,3);
+    if(c3&&c3.feita_em)return "Concluído";
+    if(c2&&c2.feita_em)return "Comercial";
+    if(c1&&c1.feita_em){ var ps=x.passos||[]; if(ps.length>0&&ps.filter(function(p){return !p.feito_em;}).length>0)return "Executando primeiros passos"; return "Teste de temas rodando"; }
     if(c.contrato_assinado_em){ if(c.briefing_ok_em)return "Estratégia"; if(c.briefing_enviado_em)return "Briefing"; return "Contrato assinado"; }
     if(c.contrato_enviado_em||c.form_contrato_ok_em)return "Contrato enviado";
     if(c.form_contrato_enviado_em)return "Form de contrato";
@@ -2705,7 +2704,7 @@ function OnboardingView({onToast}){
   }
   function diasDe(iso){ if(!iso)return null; return Math.floor((Date.now()-new Date(iso).getTime())/86400000); }
   function refTs(x,st){ var c=x.conv; var map={"Venda":c.venda_em,"Form de contrato":c.form_contrato_enviado_em,"Contrato enviado":c.contrato_enviado_em,"Contrato assinado":c.contrato_assinado_em,"Briefing":c.briefing_enviado_em}; if(map[st]!==undefined)return map[st]; var cur=currentCall(x); return cur?(cur.inicio||cur.nudge_em||cur.criado_em):null; }
-  var THR={1:6,2:8,3:9,4:10};
+  var THR={1:6,2:8,3:9};
   async function moverEtapa(x,destino){
     if(stage(x)===destino)return;
     var di=STAGES.indexOf(destino), nowv=new Date().toISOString(), c=x.conv, convPatch={};
@@ -2741,11 +2740,11 @@ function OnboardingView({onToast}){
     if(st==="Concluído")return "1º mês concluído ✅";
     if(st==="Executando primeiros passos"){ var ps=x.passos||[]; return ps.filter(function(p){return p.feito_em;}).length+"/"+ps.length+" passos feitos"; }
     var cur=currentCall(x);
-    if((st==="Estratégia"||st==="Teste de temas"||st==="Criação de funil"||st==="Comercial")&&cur){ var s=(cur.status==="agendada"&&cur.inicio)?("agendada "+fmtDateBR(cur.inicio)):cur.status==="agendada"?"agendada":"a agendar"; return s+" · "+cur.responsavel; }
+    if((st==="Estratégia"||st==="Teste de temas rodando"||st==="Comercial")&&cur){ var s=(cur.status==="agendada"&&cur.inicio)?("agendada "+fmtDateBR(cur.inicio)):cur.status==="agendada"?"agendada":"a agendar"; return cur.titulo+" "+s+" · "+cur.responsavel; }
     var d=diasDe(refTs(x,st)); return d!=null?("parado há "+d+"d"):"agora";
   }
   return h(Fr,null,
-    h("div",{style:{padding:"4px 20px 0",fontSize:12.5,color:"var(--muted)"}},"Jornada completa do cliente — ",vis.length," de ",rows.length," cliente(s). Da venda ao 1º mês entregue (as 4 calls). ",h("b",null,"Arraste o card")," pra corrigir a etapa, ou clique pra ver tudo e agir."),
+    h("div",{style:{padding:"4px 20px 0",fontSize:12.5,color:"var(--muted)"}},"Jornada completa do cliente — ",vis.length," de ",rows.length," cliente(s). Da venda ao 1º mês entregue (as 3 calls). ",h("b",null,"Arraste o card")," pra corrigir a etapa, ou clique pra ver tudo e agir."),
     h("div",{style:{display:"flex",flexWrap:"wrap",gap:6,padding:"8px 20px 2px",alignItems:"center"}},
       prodChips.map(function(p){return chip(fProd===p,p,function(){setFProd(p);});}),
       h("span",{style:{width:1,height:18,background:"var(--line)",margin:"0 4px"}}),
@@ -2825,7 +2824,7 @@ function OnbModal({x,onClose,onToast,reload}){
           );
         }),
         !c.briefing_ok_em&&h("div",{style:{fontSize:11,margin:"8px 0 2px"}},h("a",{href:discoveryLink,target:"_blank",style:{color:"var(--link)",fontWeight:600}},"🔗 link do briefing (Discovery)")),
-        h("div",{style:secLbl},"Entrega — 4 calls"),
+        h("div",{style:secLbl},"Entrega — 3 calls"),
         (x.calls||[]).map(function(cl){ var done=!!cl.feita_em; var ag=cl.status==="agendada"; var temAg=!!cl.calendar_id;
           return h("div",{key:cl.id,style:{padding:"7px 0",borderBottom:"1px solid var(--line)"}},
             h("div",{style:{display:"flex",alignItems:"center",gap:8}},
@@ -2871,13 +2870,13 @@ function OnbModal({x,onClose,onToast,reload}){
   );
 }
 
-/* ===================== ENTREGA 1º MÊS (4 calls) ===================== */
+/* ===================== ENTREGA 1º MÊS (3 calls) ===================== */
 function EntregaView({onToast}){
   const [rows,setRows]=useState(null);
   const [sel,setSel]=useState(null);
   const [fProd,setFProd]=useState("Todos"),[fTipo,setFTipo]=useState("Todos");
-  const COLS=["Estratégia","Teste de temas","Criação de funil","Comercial","Concluído"];
-  const CORES={"Estratégia":"#8A8A8A","Teste de temas":"#F59E0B","Criação de funil":"#0EA5E9","Comercial":"#8B5CF6","Concluído":"#059669"};
+  const COLS=["Estratégia","Criação de funil","Comercial","Concluído"];
+  const CORES={"Estratégia":"#8A8A8A","Criação de funil":"#0EA5E9","Comercial":"#8B5CF6","Concluído":"#059669"};
   function isMensal(c){ if(typeof c.mensal==="boolean")return c.mensal; var fp=((c.forma_pagamento||"")+"").toLowerCase(); if(fp.indexOf("boleto")>=0)return true; var pl=c.pgto_plano; if(Array.isArray(pl)&&pl.length>=2){ var pend=pl.filter(function(p){return p&&p.pago!==true;}).length; return pend>=1; } return false; }
   const load=useCallback(async function(){
     var ec=await sb.from("entrega_calls").select("*").order("ordem");
@@ -3544,7 +3543,7 @@ function ClientesEntregaView({modo,onToast}){
             campo("Instagram",x.instagram,true),
             campo("Nicho",x.nicho),
             campo("Objetivo",x.objetivo),
-            h("div",{style:{marginTop:9,paddingTop:8,borderTop:"1px solid var(--line)",fontSize:11.5,color:"var(--muted)",fontWeight:700}},"✅ calls "+x.ent.feitas+"/4 · entregáveis "+x.ent.ifeito+"/"+x.ent.itot)
+            h("div",{style:{marginTop:9,paddingTop:8,borderTop:"1px solid var(--line)",fontSize:11.5,color:"var(--muted)",fontWeight:700}},"✅ calls "+x.ent.feitas+"/3 · entregáveis "+x.ent.ifeito+"/"+x.ent.itot)
           ); })
         ),
     sel&&h(PainelEntrega,{conv:sel.id,nome:sel.nome,meuNome:meuNome,onToast:onToast,onClose:function(){setSel(null);},onChange:load})
