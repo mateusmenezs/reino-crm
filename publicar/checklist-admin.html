@@ -10,7 +10,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="vendor/supabase.js"></script>
 <style>
-  :root{--bg:#F5F3ED;--card:#FFF;--ink:#2A0B12;--vinho:#3B101D;--laranja:#FF4D00;--muted:#8A7D80;--line:#E7E1D8;--ok:#16A34A}
+  /* Marca V8 (fundo claro) — nomes antigos mantidos: --vinho = chumbo, --laranja = vermelho */
+  :root{--bg:#F5F5F5;--card:#FFF;--ink:#242424;--vinho:#242424;--laranja:#E21B2D;--muted:#5C5C5C;--line:#E2E2E2;--ok:#15803D;--sup2:#EDEDED}
+  .fases{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+  .fz{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;background:var(--sup2);color:var(--muted);cursor:default;white-space:nowrap}
+  .fz.ok{background:#E7F5EC;color:var(--ok)}
+  .fz.at{background:#FDECEE;color:var(--laranja)}
+  .pend{font-size:11.5px;color:var(--muted);margin-top:4px}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:"Manrope",system-ui,sans-serif;line-height:1.5}
   .wrap{max-width:880px;margin:0 auto;padding:22px 16px 60px}
@@ -99,7 +105,7 @@
 const SUPABASE_URL="https://lcbymyvzhnwcmpdukyqr.supabase.co";
 const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjYnlteXZ6aG53Y21wZHVreXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMjUzODgsImV4cCI6MjA4OTcwMTM4OH0.27aTgFOM0ZN3MC1s9O9iq19ihxjfuUJ16-gz2FLNsxQ";
 const sb=supabase.createClient(SUPABASE_URL,ANON);
-const ITEM_KEYS=["briefing","hospedagem","anuncios","n8n","supabase","evolution"];
+// O checklist (5 fases) é definido no banco: checklist_jornada() / checklist_jornada_time().
 const LINK_BASE=location.origin+"/checklist-cliente#c=";
 const app=document.getElementById("app");
 const modalroot=document.getElementById("modalroot");
@@ -133,50 +139,54 @@ async function boot(){
   const {data:me}=await sb.from("team_members").select("role,full_name").eq("id",session.user.id).maybeSingle();
   if(!me){app.innerHTML='<div class="center">🔒<div>Sua conta não é do time. Fale com o Mateus.</div><button class="btn" onclick="sb.auth.signOut().then(()=>location.reload())">sair</button></div>';return;}
   MEU=me.full_name||session.user.email||"time";
-  const r=await sb.from("conversations").select("id,produto,venda_em,contacts(full_name)").not("produto","is",null).eq("is_archived",false).order("venda_em",{ascending:false,nullsFirst:false});
-  const convs=r.data||[];const ids=convs.map(c=>c.id);
-  const c2={},prog={};ENTREGA={};
+  const r=await sb.rpc("checklist_jornada_time");
+  if(r.error){app.innerHTML='<div class="center">Erro ao carregar o checklist: '+esc(r.error.message)+'</div>';return;}
+  const lista=r.data||[];const ids=lista.map(c=>c.id);
+  ENTREGA={};
   if(ids.length){
-    const ec=await sb.from("entrega_calls").select("conversation_id,feita_em").eq("ordem",2).in("conversation_id",ids);
-    (ec.data||[]).forEach(x=>{if(x.feita_em)c2[x.conversation_id]=true;});
-    const ck=await sb.from("checklist_cliente").select("conversation_id,item_key,feito").in("conversation_id",ids);
-    (ck.data||[]).forEach(x=>{if(ITEM_KEYS.indexOf(x.item_key)>=0&&x.feito){(prog[x.conversation_id]=prog[x.conversation_id]||0);prog[x.conversation_id]++;}});
     const rs=await sb.from("entrega_calls_resumo").select("*").in("conversation_id",ids).order("ordem");
     (rs.data||[]).forEach(x=>{ var e=ENTREGA[x.conversation_id]||(ENTREGA[x.conversation_id]={calls:[],feitas:0,itensFeitos:0,itensTotal:0});
       e.calls.push(x); if(x.status==="feita")e.feitas++; e.itensFeitos+=Number(x.itens_feitos)||0; e.itensTotal+=Number(x.itens_total)||0; });
   }
-  ROWS=convs.map(c=>({id:c.id,nome:(c.contacts&&c.contacts.full_name)||"(sem nome)",produto:c.produto||"—",feitos:prog[c.id]||0,exec:!!c2[c.id]}));
+  ROWS=lista.map(c=>{
+    const fases=c.fases||[]; const at=fases.find(f=>f.feitos<f.total);
+    return {id:c.id,nome:c.nome||"(sem nome)",produto:c.produto||"—",feitos:c.feitos||0,total:c.total||0,fases:fases,
+      atual:at?at.n:null, atualTit:at?at.titulo:"", pendentes:at?(at.pendentes||[]):[]};
+  });
   render();
 }
 
 function render(){
   const vis=ROWS.filter(x=>{
-    if(FILTRO==="onb"&&x.exec)return false;
-    if(FILTRO==="exe"&&!x.exec)return false;
+    if(FILTRO==="ok"&&x.atual!==null)return false;
+    if(/^f\d$/.test(FILTRO)&&x.atual!==Number(FILTRO.slice(1)))return false;
     if(BUSCA&&(x.nome.toLowerCase().indexOf(BUSCA)<0&&x.produto.toLowerCase().indexOf(BUSCA)<0))return false;
     return true;
   });
   let h='<div class="top"><div class="logo"><svg width="22" height="21" viewBox="0 0 88 84"><g fill="currentColor"><path d="M12 72V12H68V44H44V28H28V72Z"/><path d="M40 48H56L76 72H54L40 56Z"/></g></svg>Reino <b style="color:var(--laranja)">CRM</b></div>'
     +'<a class="btn" href="/" style="margin-left:auto">← voltar ao CRM</a></div>'
     +'<h1>Checklist dos clientes</h1>'
-    +'<p class="sub">Copie o link pessoal do cliente (ele marca o setup). Em <b>Entrega</b> você confirma cada call e marca os entregáveis.</p>'
+    +'<p class="sub">Checklist padrão em 5 fases (o mesmo para todo cliente). O que o sistema já sabe marca sozinho; o cliente marca o resto pelo link pessoal. Em <b>Entrega</b> você confirma cada call e marca os entregáveis.</p>'
     +'<div class="bar">'
     +'<input class="search" id="busca" placeholder="Buscar por nome ou produto…" value="'+esc(BUSCA)+'">'
-    +chip("todos","Todos")+chip("onb","🚀 Onboarding")+chip("exe","⚡ Execução")
+    +chip("todos","Todos")+chip("f0","Fase 0")+chip("f1","Fase 1")+chip("f2","Fase 2")+chip("f3","Fase 3")+chip("f4","Fase 4")+chip("ok","Completos")
     +'<span class="count">'+vis.length+' cliente(s)</span></div>';
   if(vis.length===0){h+='<div style="color:var(--muted);padding:24px 4px">Nenhum cliente.</div>';}
   vis.forEach(x=>{
-    const pct=Math.round(x.feitos/ITEM_KEYS.length*100);
+    const pct=x.total?Math.round(x.feitos/x.total*100):0;
+    const fz=x.fases.map(f=>'<span class="fz'+(f.feitos===f.total?' ok':(f.n===x.atual?' at':''))+'" title="'+esc(f.titulo+(f.pendentes&&f.pendentes.length?" — falta: "+f.pendentes.join(", "):""))+'">F'+f.n+' '+f.feitos+'/'+f.total+'</span>').join("");
     const e=ENTREGA[x.id];
     var dots="";
     if(e){ e.calls.slice().sort((a,b)=>a.ordem-b.ordem).forEach(c=>{ var cls=c.status==="feita"?"f":c.status==="confirmar"?"c":c.status==="agendada"?"a":c.status==="nao_aconteceu"?"x":""; dots+='<span class="dot '+cls+'" title="'+esc(c.titulo+": "+c.status)+'"></span>'; }); }
     h+='<div class="row">'
       +'<div class="grow"><div class="nm">'+esc(x.nome)+'</div>'
       +'<div class="rmeta"><span class="pill">'+esc(x.produto)+'</span>'
-      +'<span class="phase '+(x.exec?"ph-exe":"ph-onb")+'">'+(x.exec?"Execução":"Onboarding")+'</span>'
-      +(e?'<span>· calls '+e.feitas+'/4 · itens '+e.itensFeitos+'/'+e.itensTotal+'</span>':'')
-      +'</div>'+(dots?'<div class="dots" style="justify-content:flex-start;margin-top:5px">'+dots+'</div>':'')+'</div>'
-      +'<div class="prog"><div class="pbar"><div class="pfill" style="width:'+pct+'%"></div></div><div class="ptxt">setup '+x.feitos+'/'+ITEM_KEYS.length+'</div></div>'
+      +'<span class="phase '+(x.atual===null?"ph-exe":"ph-onb")+'">'+(x.atual===null?"Jornada completa":"Fase "+x.atual+" · "+esc(x.atualTit))+'</span>'
+      +(e?'<span>· calls '+e.feitas+'/4 · entregáveis '+e.itensFeitos+'/'+e.itensTotal+'</span>':'')
+      +'</div><div class="fases">'+fz+'</div>'
+      +(x.pendentes.length?'<div class="pend">Falta: '+esc(x.pendentes.join(" · "))+'</div>':'')
+      +(dots?'<div class="dots" style="justify-content:flex-start;margin-top:5px">'+dots+'</div>':'')+'</div>'
+      +'<div class="prog"><div class="pbar"><div class="pfill" style="width:'+pct+'%"></div></div><div class="ptxt">jornada '+x.feitos+'/'+x.total+'</div></div>'
       +'<div class="acts">'
       +'<button class="btn vin" data-entrega="'+esc(x.id)+'">📋 Entrega</button>'
       +'<button class="btn lar" data-copy="'+esc(x.id)+'">🔗 Link</button>'
